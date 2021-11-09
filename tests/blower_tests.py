@@ -12,8 +12,8 @@ def start():
     signal.signal(signal.SIGINT, exit_handler)
     (motor_driver, result) = L298N(pos_pin = 13, neg_pin = 6, pwm_pin = 19).setup()
     print(result)
-    motor_driver.pos(100)
-    time.sleep(20)
+    motor_driver.drive(100)
+    time.sleep(10)
     motor_driver.destroy()
 
 if __name__ == '__main__':

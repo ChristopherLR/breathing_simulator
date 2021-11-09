@@ -43,16 +43,22 @@ class L298N:
             print('Motor Driver in unknown state')
             return (self, Result.failure)
 
-    def pos(self, power: float):
-        if power > 100:
+    def drive(self, power: float):
+        if power > 100 or power < -100:
             self.destroy()
-            raise AssertionError(f'Power: {power} needs to be less than 100')
-        if self.state == DriverState.initialised:
+            raise AssertionError(f'Power: {power} needs to be <= 100 || >= -100')
+        if self.state != DriverState.initialised:
+            print(f'Motor Driver needs to be initialised: {self.state}')
+            return
+        if power > 0:
             IO.output(self.pos_pin, IO.HIGH)
             IO.output(self.neg_pin, IO.LOW)
             self.pwm.ChangeDutyCycle(power)
         else:
-            print(f'Motor Driver needs to be initialised: {self.state}')
+            IO.output(self.pos_pin, IO.LOW)
+            IO.output(self.neg_pin, IO.HIGH)
+            self.pwm.ChangeDutyCycle(abs(power))
+
 
 
     def destroy(self):
