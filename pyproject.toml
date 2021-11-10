@@ -15,6 +15,7 @@ blower_test = "tests.blower_tests:start"
 [tool.poetry.dependencies]
 python = "^3.7"
 "RPi.GPIO" = "^0.7.0"
+smbus2 = "^0.4.1"
 
 [tool.poetry.dev-dependencies]
 

@@ -6,12 +6,29 @@ category = "main"
 optional = false
 python-versions = "*"
 
+[[package]]
+name = "smbus2"
+version = "0.4.1"
+description = "smbus2 is a drop-in replacement for smbus-cffi/smbus-python in pure Python"
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.extras]
+docs = ["sphinx (>=1.5.3)"]
+qa = ["flake8"]
+test = ["nose", "mock"]
+
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.7"
-content-hash = "83c68bd2f0be97b068bbe53aa514531eec90bfc20dc6adb7fab7e8e3fb5f7eff"
+content-hash = "15cb12391bdee78bb63f578da96daa022b7957cfc5e29fed542d6cc577c75abf"
 
 [metadata.files]
 "rpi.gpio" = [
     {file = "RPi.GPIO-0.7.0.tar.gz", hash = "sha256:7424bc6c205466764f30f666c18187a0824077daf20b295c42f08aea2cb87d3f"},
+]
+smbus2 = [
+    {file = "smbus2-0.4.1-py2.py3-none-any.whl", hash = "sha256:8b1e70cda011b6fb3caf8377a1084f73a5aa99392b78529f140b0a3f06468f6c"},
+    {file = "smbus2-0.4.1.tar.gz", hash = "sha256:6276eb599b76c4e74372f2582d2282f03b4398f0da16bc996608e4f21557ca9b"},
 ]
