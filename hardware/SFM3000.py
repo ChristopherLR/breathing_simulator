@@ -1,35 +1,35 @@
-from smbus2 import SMBus
+from smbus2 import SMBus, i2c_msg
 from time import sleep
 
 class SFM3000:
-
-    def __init__(self, address = 0x40, sda_pin = 2):
+    def __init__(self, address = 0x40):
         self.address = address
-        self.sda_pin = sda_pin
         self.bus = SMBus(1)
-        self.commands = {
-            "start_measure": 0x1000,
-            "read_serial": 0x31AE,
-            "soft_reset": 0x2000,
-        }
+        self.offset = 32000
+        self.scale = 140.0
 
     def soft_reset(self):
-        b = self.bus.write_i2c_block_data(0x40, 0, [0x20, 0x00])
-        sleep(1)
-        b = self.bus.read_i2c_block_data(0x40, 0, 3)
-        print(b)
+        msg = i2c_msg.write(self.address, [0x20, 0x00])
+        self.bus.i2c_rdwr(msg)
 
-    def read_flow(self):
-        b = self.bus.write_i2c_block_data(0x40, 0, [0x10, 0x00])
-        sleep(1)
-        b = self.bus.read_i2c_block_data(0x40, 0, 3)
-        print(b)
+    def get_flow(self) -> float:
+        write = i2c_msg.write(self.address, [0x10, 0x00])
+        self.bus.i2c_rdwr(write)
+        sleep(0.03)
+        read = i2c_msg.read(self.address, 3)
+        self.bus.i2c_rdwr(read)
+        [a, b, crc] = list(read)
+        result = a << 8 | b
+        flow = (float(result) - self.offset) / self.scale
+        return flow
 
-    def read_serial(self):
-        self.bus.write_i2c_block_data(0x81, 0, [0x31, 0xAE])
-        sleep(1)
-        b = self.bus.read_i2c_block_data(0x40, 0, 4)
-        print(b)
+    def get_serial(self):
+        write = i2c_msg.write(self.address, [0x31, 0xAE])
+        self.bus.i2c_rdwr(msg)
+        read = i2c_msg.read(self.address, 4)
+        self.bus.i2c_rdwr(read)
+        serial = list(read)
+        return serial
 
     def close(self):
         self.bus.close()
@@ -37,17 +37,8 @@ class SFM3000:
 
 if __name__ == '__main__':
     sfm = SFM3000()
-    sfm.read_flow()
-    sfm.read_serial()
-    sfm.read_flow()
-    sfm.read_flow()
-    sfm.read_flow()
-    sfm.read_flow()
-    sfm.read_flow()
-    sfm.read_flow()
-    sfm.read_flow()
-    sfm.read_flow()
-    sfm.read_flow()
-    sfm.read_flow()
-    sfm.read_flow()
+    sfm.soft_reset()
+    while True:
+        flow = sfm.get_flow()
+        print(flow)
     sfm.close()

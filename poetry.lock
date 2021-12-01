@@ -1,4 +1,12 @@
 [[package]]
+name = "python-periphery"
+version = "2.3.0"
+description = "A pure Python 2/3 library for peripheral I/O (GPIO, LED, PWM, SPI, I2C, MMIO, Serial) in Linux."
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
 name = "rpi.gpio"
 version = "0.7.0"
 description = "A module to control Raspberry Pi GPIO channels"
@@ -22,9 +30,13 @@ test = ["nose", "mock"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.7"
-content-hash = "15cb12391bdee78bb63f578da96daa022b7957cfc5e29fed542d6cc577c75abf"
+content-hash = "cf0265257ed36c7c9d2ce66d9dcdacbdf2c1b0d12d515c19b5f517e9bf34de54"
 
 [metadata.files]
+python-periphery = [
+    {file = "python-periphery-2.3.0.tar.gz", hash = "sha256:8a8ec019d9b330a6a6f69a7de61d14b4c98b102d76359047c5ce0263e12246a6"},
+    {file = "python_periphery-2.3.0-py2.py3-none-any.whl", hash = "sha256:fad31a38003521b686f3834dfd7b03b041ec29ab9aa3783a8e801baab4d0c761"},
+]
 "rpi.gpio" = [
     {file = "RPi.GPIO-0.7.0.tar.gz", hash = "sha256:7424bc6c205466764f30f666c18187a0824077daf20b295c42f08aea2cb87d3f"},
 ]

@@ -59,8 +59,6 @@ class L298N:
             IO.output(self.neg_pin, IO.HIGH)
             self.pwm.ChangeDutyCycle(abs(power))
 
-
-
     def destroy(self):
         if self.state == DriverState.initialised:
             self.pwm.stop()

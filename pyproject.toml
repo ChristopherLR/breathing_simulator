@@ -16,6 +16,7 @@ blower_test = "tests.blower_tests:start"
 python = "^3.7"
 "RPi.GPIO" = "^0.7.0"
 smbus2 = "^0.4.1"
+python-periphery = "^2.3.0"
 
 [tool.poetry.dev-dependencies]
 
