@@ -7,19 +7,18 @@ authors = ["chris <christopher.sutton12@gmail.com>"]
 packages = [
 	{ include="hardware", from="." },
 	{ include="tests", from="." },
-	{ include="web-interface", from="." },
+	{ include="communication", from="." },
 ]
 
 [tool.poetry.scripts]
 blower_test = "tests.blower_tests:start"
+server = "communication.main:start"
 
 [tool.poetry.dependencies]
 python = "^3.7"
-"RPi.GPIO" = "^0.7.0"
+# "RPi.GPIO" = "^0.7.0"
 smbus2 = "^0.4.1"
 python-periphery = "^2.3.0"
-fastapi = "^0.70.0"
-websockets = "^10.1"
 python-dotenv = "^0.19.2"
 
 [tool.poetry.dev-dependencies]
