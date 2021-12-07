@@ -25,7 +25,7 @@ class L298N:
         print(f'Caught {signum} cleaning up IO')
         self.destroy()
 
-    def setup(self) -> (L298N, Result):
+    def setup(self) -> tuple[L298N, Result]:
         if self.state == DriverState.uninitialised:
             print(f'Initialising L298N Motor Driver: POS {self.pos_pin}, NEG {self.neg_pin}, PWM: {self.pwm_pin}')
             IO.setmode(IO.BCM)
