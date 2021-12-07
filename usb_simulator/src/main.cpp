@@ -185,8 +185,6 @@ Request process_input(const char * data) {
   DeserializationError err = deserializeJson(doc, data);
 
   const char * type = doc["type"] | "NA";
-  Serial.println("ere");
-  Serial.println(type);
 
   if (strcmp(type, "NA") == 0) return Request::invalid;
 
