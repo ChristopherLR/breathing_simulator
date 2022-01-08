@@ -88,6 +88,7 @@ void setup() {
   digitalWrite(TRIGGER2, LOW);
 
   while (!Serial); // wait for serial port to connect. Needed for native USB
+  Serial.println("Device Boot");
 
   metadata["version"] = VERSION;
   metadata["baud"] = BAUD;
@@ -100,6 +101,8 @@ void setup() {
 
 
 void loop() {
+  Serial.println(state);
+  delay(50);
   switch(state){
     case waiting_for_connection:
       break;
