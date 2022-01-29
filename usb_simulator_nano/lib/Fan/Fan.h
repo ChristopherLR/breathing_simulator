@@ -5,14 +5,14 @@
 #include <ArduinoJson.h>
 #include <stdint.h>
 
-#define DRIVER_POS D2
-#define DRIVER_NEG D3
-#define DRIVER_PWM 16u
+#define IN1 36
+#define IN2 37
+#define ENA A0
 
-#define FAN_PWM A3
+#define FAN_PWM 15
 
-#define TRIGGER1 D9
-#define TRIGGER2 D8
+#define TRIGGER1 2
+#define TRIGGER2 3
 
 typedef struct const_profile {
   float flow;

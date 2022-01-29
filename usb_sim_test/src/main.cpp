@@ -12,28 +12,32 @@
 #define FM_ADDRESS 0x40
 #define BUFFER_SIZE 64
 
-#define DRIVER_POS 37
-#define DRIVER_NEG 36
-#define DRIVER_PWM 15
+#define PWM A0
+#define EN  35
+#define IN1 36
+#define IN2 37
 
 
 char buf[BUFFER_SIZE];
 
-void process_data(const char *);
+void process_input(const char *);
 void process_incoming_byte(const byte);
+char reset = 0;
 
 void setup() {
 
   Wire.begin();
   Serial.begin(BAUD);
 
-  pinMode(DRIVER_POS, OUTPUT);
-  pinMode(DRIVER_NEG, OUTPUT);
-  pinMode(DRIVER_PWM, OUTPUT);
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(EN, OUTPUT);
+  pinMode(PWM, OUTPUT);
 
-  digitalWrite(DRIVER_POS, LOW);
-  digitalWrite(DRIVER_NEG, LOW);
-  analogWrite(DRIVER_PWM, LOW);
+  digitalWrite(EN, LOW);
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  analogWrite(PWM, 0);
 
   while (!Serial); // wait for serial port to connect. Needed for native USB
   Wire.beginTransmission(FM_ADDRESS);
@@ -42,9 +46,9 @@ void setup() {
   Wire.endTransmission();
 
   Serial.println("TEST");
+  reset = 1;
 }
 
-volatile char reset = 0;
 
 
 void loop() {
@@ -81,11 +85,24 @@ void serialEvent(){
   }
 }
 
-const unsigned int MAX_INPUT = 50;
-void process_data (const char * data){
-  Serial.println (data);
-}
+static uint8_t driver_pwm = 255;
+void process_input(const char * data){
+  String dat = String(data+1);
+  driver_pwm = (unsigned char)dat.toInt();
+  if(data[0] == 'p'){
+    Serial.println("POS");
+    digitalWrite(EN, HIGH);
+    digitalWrite(IN1, HIGH);
+    digitalWrite(IN2, LOW);
+    analogWrite(PWM, driver_pwm);
+  }
+  if(data[0] == 'n'){
+    Serial.println("NEG");
+    digitalWrite(EN, LOW);
+  }
 
+}
+const unsigned int MAX_INPUT = 50;
 void process_incoming_byte (const byte inByte){
   static char input_line [MAX_INPUT];
   static unsigned int input_pos = 0;
@@ -94,7 +111,7 @@ void process_incoming_byte (const byte inByte){
     case '\n':   // end of text
       input_line [input_pos] = 0;  // terminating null byte
 
-      process_data (input_line);
+      process_input(input_line);
       
       // reset buffer for next time
       input_pos = 0;  
