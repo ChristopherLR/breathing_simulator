@@ -2,17 +2,20 @@
 
 #include <stdint.h>
 
+#define MAX_PWM 4095
+
 typedef struct {
   float * input;
-  unsigned char * output;
   float setpoint;
-  float kp;
-  float ki;
-  float kd;
-  unsigned char hit_start;
-} pid_state;
+  uint16_t * output;
+  double kp;
+  double ki;
+  double kd;
+  uint16_t hit_start;
 
-void initialise_pid(float * input, unsigned char * output, float kp, float ki, float kd);
-void set_setpoint(float setpoint);
-void compute_pid();
-void start_pid();
+} PidState;
+
+void InitialisePid(float * input, uint16_t * output, double kp, double ki, double kd);
+void SetSetpoint(float setpoint);
+void ComputePid();
+void StartPid();

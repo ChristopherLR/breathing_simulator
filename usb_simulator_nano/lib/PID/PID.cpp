@@ -1,9 +1,11 @@
-#include <PID.h>
+#include <pid.h>
 #include <Arduino.h>
+#include <stdint.h>
 
-pid_state pid = {
+
+PidState pid = {
   0,
-  0,
+  0.0f,
   0,
   0.0f,
   0.0f,
@@ -11,17 +13,17 @@ pid_state pid = {
   0
 };
 
-#define SAMPLE_TIME 10
-static unsigned long now;
-static unsigned long last_time;
-static unsigned long time_d;
+#define SAMPLE_TIME 5
+static uint64_t now;
+static uint64_t last_time;
+static uint64_t time_d;
 static float err;
-static float input_d;
-static float output_sum;
-static float output_lin;
-static float last_input;
+static double input_d;
+static double output_sum;
+static double output_lin;
+static double last_input;
 
-void initialise_pid(float * input, unsigned char * output, float kp, float ki, float kd) {
+void InitialisePid(float * input, uint16_t * output, double kp, double ki, double kd) {
   pid.input = input;
   pid.output = output;
   pid.kp = kp;
@@ -30,23 +32,28 @@ void initialise_pid(float * input, unsigned char * output, float kp, float ki, f
   last_time = millis();
 }
 
-void set_setpoint(float setpoint) {
+void SetSetpoint(float setpoint) {
   pid.setpoint = setpoint;
 }
 
-void start_pid() {
+void StartPid() {
   pid.hit_start = 0;
 }
 
 
 // Look into feed forward
 // Kalman filters
-void compute_pid() {
+void ComputePid() {
   now = millis();
   time_d = now - last_time;
   if (time_d < SAMPLE_TIME) return;
   err = pid.setpoint - *(pid.input);
-  if (err < 0) pid.hit_start = 1;
+  if (err < 0) {
+    pid.hit_start = 1;
+  } 
+  // else if (pid.hit_start == 0) {
+  //   return;
+  // }
 
 
   input_d = *(pid.input) - last_input;
@@ -55,8 +62,8 @@ void compute_pid() {
   output_sum += pid.ki * err;
   output_lin += output_sum  - pid.kd * input_d;
 
-  if (output_lin > 255) {
-    *(pid.output) = 255;
+  if (output_lin > MAX_PWM) {
+    *(pid.output) = MAX_PWM;
   } else if (output_lin < 0) {
     *(pid.output) = 0;
   } else {

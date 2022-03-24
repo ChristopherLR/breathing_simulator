@@ -1,35 +1,64 @@
 #pragma once
 
 #include <Arduino.h>
-#include <enums.h>
 #include <ArduinoJson.h>
+#include <enums.h>
 #include <stdint.h>
 
+#ifdef ARDUINO_TEENSY41
+#define PWM A0
+#define EN 35
 #define IN1 36
 #define IN2 37
-#define ENA A0
-
-#define FAN_PWM 15
-
 #define TRIGGER1 2
 #define TRIGGER2 3
+#endif
 
-typedef struct const_profile {
+#ifdef ARDUINO_ARDUINO_NANO33BLE
+#define PWM A0
+#define EN A7
+#define IN1 A6
+#define IN2 A3
+#define TRIGGER1 A1
+#define TRIGGER2 A2
+#endif
+
+#ifdef ARDUINO_SAMD_NANO_33_IOT
+#endif
+
+typedef struct {
   float flow;
-  unsigned int duration;
-  unsigned int delay;
-} const_profile;
+  uint32_t duration;
+  uint16_t delay;
+} ConstProfile;
 
-result initialise_fan();
-void set_const_flow(float flow, unsigned int duration, unsigned int delay);
-uint8_t fan_loop();
-void send_flow();
-void send_const_flow();
-void send_dynamic_flow();
-void print_profile();
-void fan_go();
-void fan_stop();
-void print_flow();
-void stop_motor();
-void set_manual_flow(unsigned char motor_state, unsigned char driver, unsigned char motor);
-void send_manual_flow();
+typedef struct {
+  uint32_t duration;
+  uint32_t count;
+  uint16_t delay;
+  uint16_t interval;
+  bool confirmed;
+} DynamicProfile;
+
+Result InitialiseFan();
+void SetConstFlow(float flow, uint32_t dur, uint16_t delay);
+void SendConstFlow();
+uint8_t FanLoop();
+void SendFlow();
+void SendDynamicFlow();
+void PrintProfile();
+void FanGo();
+void FanStop();
+void PrintFlow();
+void StopMotor();
+void SetManualFlow(unsigned char motor_state, unsigned char driver);
+void SetDynamicFlow(unsigned int count, unsigned int delay,
+                      unsigned int duration, unsigned short interval);
+void SendManualFlow();
+void SetInterval(unsigned short interval, float flow);
+void SetFin();
+AckResponse ProcessAck(const uint8_t in);
+void ConfirmFlow();
+void ConfirmFlowProfile();
+void PrintDynamicProfile();
+void RunDynamicProfile();

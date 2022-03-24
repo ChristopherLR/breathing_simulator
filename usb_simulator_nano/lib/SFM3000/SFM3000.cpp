@@ -1,18 +1,18 @@
-#include <SFM3000.h>
-#include <enums.h>
 #include <Arduino.h>
+#include <sfm3000.h>
 #include <Wire.h>
+#include <enums.h>
 
-result initialise_sfm(){
+Result InitialiseSfm() {
   Wire.begin();
   Wire.beginTransmission(FM_ADDRESS);
   Wire.write(0x10);
   Wire.write(0x00);
   Wire.endTransmission();
-  return result::ok;
+  return Result::kOk;
 }
 
-void get_flow(result * res, float * value){
+void GetFlow(Result* res, float* value) {
   static uint16_t a;
   static uint8_t b;
 
@@ -20,9 +20,9 @@ void get_flow(result * res, float * value){
     a = Wire.read();
     b = Wire.read();
     a = (a << 8) | b;
-    *value = ((float)a - OFFSET)/SCALE;
-    *res = result::ok;
+    *value = ((float)a - OFFSET) / SCALE;
+    *res = Result::kOk;
   } else {
-    *res = result::err;
+    *res = Result::kErr;
   }
 }

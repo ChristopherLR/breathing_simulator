@@ -3,11 +3,11 @@
 
 #include <ArduinoJson.h>
 #include <elapsedMillis.h>
-#include <SFM3000.h>
-#include <Fan.h>
+#include <sfm3000.h>
+#include <fan.h>
 #include <enums.h>
 
-#define VERSION "0.2.0"
+#define VERSION "0.3.1"
 #define BAUD 115200
 #define HEARTBEAT_DELAY 500
 
@@ -18,50 +18,50 @@
 
 elapsedMillis runtime;
 
-void process_incoming_byte (const byte);
-system_event process_input(const char *);
-result connect();
-void send_heartbeat();
-void print_request(result res);
-void transition_state();
+void ProcessIncomingByte (const byte);
+SystemEvent ProcessInput(const char *);
+Result connect();
+void SendHeartbeat();
+void PrintRequest(Result res);
+void TransistionState();
 
-system_event event = system_event::none;
-system_state state = system_state::waiting_for_connection;
+SystemEvent event = SystemEvent::kNone;
+SystemState state = SystemState::kWaitingForConnection;
 
 DynamicJsonDocument doc(1024);
-StaticJsonDocument<256> metadata;
+StaticJsonDocument<128> metadata;
 
 void setup() {
   
   Serial.begin(BAUD);
   while (!Serial); // wait for serial port to connect. Needed for native USB
 
-  initialise_fan();
+  InitialiseFan();
 
+  analogWriteResolution(12);
   metadata["version"] = VERSION;
   metadata["baud"] = BAUD;
-
 }
 
 
 void loop() {
-  if (Serial.available()) process_incoming_byte(Serial.read());
+  if (Serial.available()) ProcessIncomingByte(Serial.read());
 
   switch(state){
-    case system_state::waiting_for_connection:
+    case SystemState::kWaitingForConnection:
       break;
-    case system_state::sending_heartbeat: 
-      send_heartbeat();
+    case SystemState::kSendingHeartbeat: 
+      SendHeartbeat();
       break;
-    case system_state::sending_flow: 
-      if(fan_loop()) state = system_state::sending_heartbeat;
+    case SystemState::kSendingFlow: 
+      if(FanLoop()) state = SystemState::kSendingHeartbeat;
       break;
     default: 
       Serial.println("Unknown state");
   }
 }
 
-void process_incoming_byte (const uint8_t in){
+void ProcessIncomingByte (const uint8_t in){
   static char input_line [BUFFER_SIZE];
   static unsigned int input_pos = 0;
 
@@ -71,8 +71,8 @@ void process_incoming_byte (const uint8_t in){
       input_pos = 0;  
 
       Serial.println(input_line);
-      event = process_input(input_line);
-      transition_state();
+      event = ProcessInput(input_line);
+      TransistionState();
       
       // reset buffer for next time
       break;
@@ -88,59 +88,98 @@ void process_incoming_byte (const uint8_t in){
   }
 }
 
-void transition_state(){
-  static result res = result::ok;
+void TransistionState(){
+  static Result res = Result::kOk;
 
   switch (event) {
-    case system_event::none:
+    case SystemEvent::kNone:
       break;
-    case system_event::invalid: {
+    case SystemEvent::kInvalid: {
       Serial.println("Invalid event");
       break;
     }
-    case system_event::attempt_connect: {
+    case SystemEvent::kAttemptConnect: {
       res = connect();
-      if (res == result::ok) state = system_state::sending_heartbeat;
-      if (res == result::err) Serial.println("Error connecting");
+      if (res == Result::kOk) state = SystemState::kSendingHeartbeat;
+      if (res == Result::kErr) Serial.println("Error connecting");
       break;
     }
-    case system_event::start_constant_flow: {
+    case SystemEvent::kStartConstantFlow: {
       Serial.println("Setting up constant flow");
       float flow = doc["f"]   | 0.0; // Flow
       unsigned int delay  = doc["dl"]  | 0; // Delay
       unsigned int length = doc["d"] | 0; // Duration
 
       if (flow <= 0.0 || length <= 0) {
-        res = result::err;
+        res = Result::kErr;
         Serial.print("Error setting up, flow: ");Serial.print(flow);Serial.print(", delay: ");Serial.println(length);
       }
 
-      if (res == result::ok) { 
-        set_const_flow(flow, length, delay);
-        print_profile();
-        state = system_state::sending_flow;
+      if (res == Result::kOk) { 
+        SetConstFlow(flow, length, delay);
+        PrintProfile();
+        state = SystemState::kSendingFlow;
       }
 
       break;
     }
-    case system_event::start_manual_flow: {
+    case SystemEvent::kStartManualFlow: {
       Serial.println("Starting manual flow");
       unsigned char motor_state = doc["ms"] | 0; // Motor State
       unsigned char driver = doc["dv"] | 0; // Driver
-      unsigned char motor = doc["m"] | 0; // Motor (Fan)
 
-      set_manual_flow(motor_state, driver, motor);
-      state = system_state::sending_flow;
+      SetManualFlow(motor_state, driver);
+      state = SystemState::kSendingFlow;
       break;
     }
-    case system_event::start_dynamic_flow: {
-      Serial.println("Unimplemented");
+    case SystemEvent::kStartDynamicFlow: {
+      Serial.println("Receiving dynamic flow data");
+      unsigned int count = doc["c"]  | 0;
+      unsigned int delay = doc["dl"] | 0;
+      unsigned int duration = doc["d"] | 0;
+      unsigned short interval = doc["dfi"] | 0;
+
+      if (count <= 0 || duration <= 0 || interval < 5) {
+        res = Result::kErr;
+        Serial.print("Error setting up, count: ");Serial.print(count);
+        Serial.print(", delay: "); Serial.print(delay);
+        Serial.print(", interval: "); Serial.print(interval);
+        Serial.print(", duration: "); Serial.println(duration);
+      }
+
+      if (res == Result::kOk) {
+        SetDynamicFlow(count, delay, duration, interval);
+        state = SystemState::kSendingFlow;
+      }
       break;
     }
-    case system_event::end_flow: {
+    case SystemEvent::kConfirmDynamicFlow: {
+      ConfirmFlowProfile();
+      state = SystemState::kSendingFlow;
+      break;
+    }
+    case SystemEvent::kRunDynamicFlow: {
+      RunDynamicProfile();
+      state = SystemState::kSendingFlow;
+      break;
+    }
+    case SystemEvent::kReceiveDynamicFlowInterval: {
+      unsigned short interval = doc["dfi"] | 0;
+      float flow = doc["f"] | 0.0f;
+      unsigned char fin = doc["fin"] | 0;
+
+      if (fin != 0) {
+        SetFin();
+        state = SystemState::kSendingFlow;
+        Serial.println("received_fin");
+      }
+      SetInterval(interval, flow);
+      break;
+    }
+    case SystemEvent::kEndFlow: {
       Serial.println("Stopping system");
 
-      stop_motor();
+      StopMotor();
       break;
     }
     default:
@@ -148,33 +187,39 @@ void transition_state(){
   }
 }
 
-system_event process_input(const char * data) {
+SystemEvent ProcessInput(const char * data) {
+  if (strcmp(data, "ack") == 0) return SystemEvent::kNone;
+  if (strcmp(data, "nak") == 0) return SystemEvent::kNone;
+
   DeserializationError err = deserializeJson(doc, data);
 
   if (err != DeserializationError::Ok) Serial.println("Error deserialising input");
 
   const char * type = doc["t"] | "NA";
-  Serial.println(type);
+  // Serial.println(type);
 
-  if (strcmp(type, "NA") == 0) return system_event::invalid;
-  if (strcmp(type, "connect") == 0) return system_event::attempt_connect;
-  if (strcmp(type, "c") == 0) return system_event::start_constant_flow;
-  if (strcmp(type, "m") == 0) return system_event::start_manual_flow;
-  if (strcmp(type, "d") == 0) return system_event::start_dynamic_flow;
+  if (strcmp(type, "NA") == 0) return SystemEvent::kInvalid;
+  if (strcmp(type, "connect") == 0) return SystemEvent::kAttemptConnect;
+  if (strcmp(type, "const") == 0) return SystemEvent::kStartConstantFlow;
+  if (strcmp(type, "dynamic") == 0) return SystemEvent::kStartDynamicFlow;
+  if (strcmp(type, "confirm") == 0) return SystemEvent::kConfirmDynamicFlow;
+  if (strcmp(type, "interval") == 0) return SystemEvent::kReceiveDynamicFlowInterval;
+  if (strcmp(type, "manual") == 0) return SystemEvent::kStartManualFlow;
+  if (strcmp(type, "run") == 0) return SystemEvent::kRunDynamicFlow;
   
-  return system_event::invalid;
+  return SystemEvent::kInvalid;
 }
 
-void send_heartbeat() {
+void SendHeartbeat() {
   if (runtime > 1000){
     Serial.println("alive");
     runtime = 0;
   }
 }
 
-result connect() {
+Result connect() {
   size_t len = serializeJson(metadata, Serial);
   Serial.print("\r\n");
-  if (len > 0) return result::ok;
-  return result::err;
+  if (len > 0) return Result::kOk;
+  return Result::kErr;
 }
