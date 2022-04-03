@@ -39,3 +39,8 @@ typedef enum {
   kConfirmingFlow,
   kIdle,
 } FanState;
+
+typedef enum {
+  kClockwise,
+  kCounterClockwise,
+} FanDirection;

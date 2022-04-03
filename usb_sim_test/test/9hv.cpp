@@ -19,8 +19,6 @@
 #define IN2 A3
 #define FAN_RPM A2
 #define FAN_PWM A1
-#define HIGH 1
-#define LOW 0
 #endif
 
 #ifdef ARDUINO_TEENSY41
@@ -79,6 +77,9 @@ void setup() {
 
 
 static uint16_t driver_pwm = 0;
+static uint16_t fan_pwm = 0;
+static uint8_t control1 = 0;
+static uint8_t control2 = 0;
 static uint16_t counter = 0;
 static uint8_t running = 1;
 
@@ -112,11 +113,12 @@ void loop() {
     }  
 
     Serial.print(driver_pwm);Serial.print(",");
+    Serial.print(fan_pwm);Serial.print(",");
     Serial.print(flow); Serial.print(",");
     Serial.println(timer);
 
     // counter += 1;
-    // if (counter >= 50){
+    // if (counter >= 500){
     //   driver_pwm += 1;
     //   analogWrite(PWM, driver_pwm);
     //   counter = 0;
@@ -138,13 +140,18 @@ void process_input(const char * data){
     digitalWrite(IN2, LOW);
     analogWrite(PWM, driver_pwm);
   }
-
-  if(data[0] == 'n'){
-    driver_pwm = (uint16_t)dat.toInt();
+  if(data[0] == 'f'){
+    fan_pwm = (uint16_t)dat.toInt();
     digitalWrite(EN, HIGH);
-    digitalWrite(IN1, LOW);
-    digitalWrite(IN2, HIGH);
-    analogWrite(PWM, driver_pwm);
+    digitalWrite(IN1, HIGH);
+    digitalWrite(IN2, LOW);
+    analogWrite(FAN_PWM, fan_pwm);
+  }
+  if(data[0] == 'n'){
+    driver_pwm = 0;
+    control1 = 0;
+    control2 = 0;
+    digitalWrite(EN, LOW);
   }
 
 }

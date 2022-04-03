@@ -12,33 +12,31 @@
 #define FM_ADDRESS 0x40
 #define BUFFER_SIZE 64
 
-#if defined(ARDUINO_ARDUINO_NANO33BLE) || defined(ARDUINO_SAMD_NANO_33_IOT)
-#define PWM A0
-#define EN  A7
-#define IN1 A6
-#define IN2 A3
-#define FAN_RPM A2
-#define FAN_PWM A1
-#define HIGH 1
 #define LOW 0
-#endif
+#define HIGH 1
 
 #ifdef ARDUINO_TEENSY41
-#define PWM A0
-#define EN  35
+#define ENA A0
 #define IN1 36
 #define IN2 37
-#define CONT1 22
-#define CONT2 23
 #endif
+
+#if defined(ARDUINO_ARDUINO_NANO33BLE) || defined(ARDUINO_SAMD_NANO_33_IOT)
+#define PWM A0
+#define ENA A7
+#define IN1 A6
+#define IN2 A3
+#define CONT1 A2
+#define CONT2 A1
+#endif
+
+elapsedMillis runtime;
+elapsedMillis timer;
 
 char buf[BUFFER_SIZE];
 
 void process_input(const char *);
 void process_incoming_byte(const byte);
-char reset = 0;
-elapsedMillis runtime;
-elapsedMillis timer;
 
 void setup() {
 
@@ -47,19 +45,11 @@ void setup() {
 
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT);
-  pinMode(EN, OUTPUT);
-  pinMode(PWM, OUTPUT);
-  pinMode(FAN_PWM, OUTPUT);
-  pinMode(FAN_RPM, INPUT);
+  pinMode(ENA, OUTPUT);
 
-  // MAX 4095
-  analogWriteResolution(12);
-
-  digitalWrite(EN, LOW);
+  digitalWrite(ENA, LOW);
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, LOW);
-  analogWrite(PWM, 0);
-  analogWrite(FAN_PWM, 0);
 
   while (!Serial); // wait for serial port to connect. Needed for native USB
   Wire.beginTransmission(FM_ADDRESS);
@@ -68,24 +58,14 @@ void setup() {
   Wire.endTransmission();
 
   Serial.println("TEST");
-  reset = 1;
-  timer = 0;
-
-  digitalWrite(EN, HIGH);
-  digitalWrite(IN1, HIGH);
-  digitalWrite(IN2, LOW);
-  analogWrite(PWM, 0);
 }
 
-
-static uint16_t driver_pwm = 0;
-static uint16_t counter = 0;
-static uint8_t running = 1;
+static char reset = 0;
+static uint8_t driver_pwm = 0;
 
 void loop() {
-  while (Serial.available() > 0){
-    process_incoming_byte(Serial.read());
-  }
+  while (Serial.available() > 0) process_incoming_byte(Serial.read());
+
   static uint16_t a;
   static uint8_t  b;
   static float flow;
@@ -101,7 +81,8 @@ void loop() {
     reset = 0;
   }
 
-  if (runtime > 10 && running){
+
+  if (runtime > 10){
     runtime = 0;
     char avail = Wire.requestFrom(FM_ADDRESS, 2);
     if (avail == 2) {
@@ -111,40 +92,24 @@ void loop() {
       flow = ((float)a - OFFSET)/SCALE;
     }  
 
-    Serial.print(driver_pwm);Serial.print(",");
-    Serial.print(flow); Serial.print(",");
-    Serial.println(timer);
-
-    // counter += 1;
-    // if (counter >= 50){
-    //   driver_pwm += 1;
-    //   analogWrite(PWM, driver_pwm);
-    //   counter = 0;
-    //   if (flow >= 130){
-    //     running = false;
-    //     digitalWrite(EN, LOW);
-    //     driver_pwm = 0;
-    //   }
-    // }
+    Serial.print("P: "); Serial.print(driver_pwm);
+    Serial.print(", F: "); Serial.print(flow);
+    Serial.print(", T: "); Serial.println(timer);
   }
+
 }
 
 void process_input(const char * data){
   String dat = String(data+1);
+  driver_pwm = (unsigned char)dat.toInt();
   if(data[0] == 'p'){
-    driver_pwm = (uint16_t)dat.toInt();
-    digitalWrite(EN, HIGH);
-    digitalWrite(IN1, HIGH);
-    digitalWrite(IN2, LOW);
-    analogWrite(PWM, driver_pwm);
+    digitalWrite(ENA, HIGH);
+    analogWrite(IN1, driver_pwm);
+    analogWrite(IN2, 0);
+    timer = 0;
   }
-
   if(data[0] == 'n'){
-    driver_pwm = (uint16_t)dat.toInt();
-    digitalWrite(EN, HIGH);
-    digitalWrite(IN1, LOW);
-    digitalWrite(IN2, HIGH);
-    analogWrite(PWM, driver_pwm);
+    digitalWrite(ENA, LOW);
   }
 
 }

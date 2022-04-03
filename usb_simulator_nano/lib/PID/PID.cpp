@@ -1,17 +1,8 @@
-#include <pid.h>
 #include <Arduino.h>
+#include <pid.h>
 #include <stdint.h>
 
-
-PidState pid = {
-  0,
-  0.0f,
-  0,
-  0.0f,
-  0.0f,
-  0.0f,
-  0
-};
+PidState pid = {0, 0.0f, 0, 0.0f, 0.0f, 0.0f, 0, 0};
 
 #define SAMPLE_TIME 5
 static uint64_t now;
@@ -23,23 +14,20 @@ static double output_sum;
 static double output_lin;
 static double last_input;
 
-void InitialisePid(float * input, uint16_t * output, double kp, double ki, double kd) {
+void InitialisePid(float* input, uint16_t* output, double kp, double ki,
+                   double kd, FanDirection* fan_direction) {
   pid.input = input;
   pid.output = output;
   pid.kp = kp;
   pid.ki = ki;
   pid.kd = kd;
+  pid.fan_direction = fan_direction;
   last_time = millis();
 }
 
-void SetSetpoint(float setpoint) {
-  pid.setpoint = setpoint;
-}
+void SetSetpoint(float setpoint) { pid.setpoint = setpoint; }
 
-void StartPid() {
-  pid.hit_start = 0;
-}
-
+void StartPid() { pid.hit_start = 0; }
 
 // Look into feed forward
 // Kalman filters
@@ -50,24 +38,31 @@ void ComputePid() {
   err = pid.setpoint - *(pid.input);
   if (err < 0) {
     pid.hit_start = 1;
-  } 
+  }
   // else if (pid.hit_start == 0) {
   //   return;
   // }
 
-
   input_d = *(pid.input) - last_input;
-  
+
   output_lin = pid.kp * err;
   output_sum += pid.ki * err;
-  output_lin += output_sum  - pid.kd * input_d;
+  output_lin += output_sum - pid.kd * input_d;
 
-  if (output_lin > MAX_PWM) {
-    *(pid.output) = MAX_PWM;
-  } else if (output_lin < 0) {
-    *(pid.output) = 0;
+  if (output_lin > 0) {
+    *(pid.fan_direction) = FanDirection::kClockwise;
+    if (output_lin >= MAX_PWM) {
+      *(pid.output) = MAX_PWM;
+    } else {
+      *(pid.output) = output_lin;
+    }
   } else {
-    *(pid.output) = output_lin;
+    *(pid.fan_direction) = FanDirection::kCounterClockwise;
+    if (output_lin <= -MAX_PWM) {
+      *(pid.output) = MAX_PWM;
+    } else {
+      *(pid.output) = -output_lin;
+    }
   }
 
   last_input = *(pid.input);

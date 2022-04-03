@@ -22,6 +22,7 @@ static float flow = 0.0;
 
 // Motor
 static uint16_t driver_pwm = MAX_PWM;
+static FanDirection fan_direction = FanDirection::kClockwise;
 static uint8_t motor = 0;
 static uint8_t sent_start = 0;
 
@@ -40,15 +41,20 @@ Result InitialiseFan() {
   pinMode(TRIGGER2, OUTPUT);
   digitalWrite(TRIGGER1, LOW);
   digitalWrite(TRIGGER2, LOW);
-  InitialisePid(&flow, &driver_pwm, kP, kI, kD);
+  InitialisePid(&flow, &driver_pwm, kP, kI, kD, &fan_direction);
 
   return InitialiseSfm();
 }
 
 void FanGo() {
   digitalWrite(EN, HIGH);
-  digitalWrite(IN1, HIGH);
-  digitalWrite(IN2, LOW);
+  if (fan_direction == FanDirection::kClockwise) {
+    digitalWrite(IN1, HIGH);
+    digitalWrite(IN2, LOW);
+  } else {
+    digitalWrite(IN1, LOW);
+    digitalWrite(IN2, HIGH);
+  }
   analogWrite(PWM, driver_pwm);
 }
 
