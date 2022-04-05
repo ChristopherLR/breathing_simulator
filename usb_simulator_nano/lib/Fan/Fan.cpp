@@ -1,22 +1,14 @@
 #include <Arduino.h>
-#include <ArduinoJson.h>
 #include <fan.h>
 #include <pid.h>
 #include <sfm3000.h>
 #include <elapsedMillis.h>
 #include <enums.h>
 #include <stdint.h>
-
-#define DEBUG 1
-
-//TODO: Look at arduino-printf
-#if DEBUG == 1
-#define debug(x) Serial.print(x)
-#define debugln(x) Serial.println(x)
-#else
-#define debug(x)
-#define debugln(x)
-#endif
+#include <flow_definition.pb.h>
+#include <message_parser.h>
+#include "pb_decode.h"
+#include "pb_encode.h"
 
 ConstProfile c_profile = {0.0, 0, 0};
 static float flow_setpoint[1500];
@@ -76,57 +68,39 @@ void FanStop() {
   analogWrite(PWM, 0);
 }
 
-void SetConstFlow(float flow, uint32_t dur, uint16_t delay) {
-  c_profile.flow = flow;
-  c_profile.duration = dur;
-  c_profile.delay = delay;
-  SetSetpoint(flow);
+void SetConstFlow(InterfaceMessage *message){
+  c_profile.flow            = message->message.constant_flow.flow;
+  c_profile.duration        = message->message.constant_flow.duration;
+  c_profile.trigger1_delay  = message->message.constant_flow.trigger1_delay;
+  c_profile.trigger2_delay  = message->message.constant_flow.trigger2_delay;
+  SetSetpoint(c_profile.flow);
   f_state = FanState::kSendingConstantFlow;
   driver_pwm = MAX_PWM;
   sent_start = 0;
 }
 
-void SetDynamicFlow(unsigned int count, unsigned int delay,
-                    unsigned int duration, unsigned short interval) {
-  d_profile.duration = duration;
-  d_profile.count = count;
-  d_profile.delay = delay;
-  d_profile.interval = interval;
+void SetDynamicFlow(InterfaceMessage *message) {
+  d_profile.duration  = message->message.dynamic_flow.duration;
+  d_profile.count     = message->message.dynamic_flow.count;
+  d_profile.delay     = message->message.dynamic_flow.delay;
+  d_profile.interval  = message->message.dynamic_flow.interval;
   d_profile.confirmed = false;
 
-  Serial.println("Receiving dynamic flow");
-  PrintDynamicProfile();
   f_state = FanState::kReceivingDynamicFlow;
   fan_runtime = 0;
   sample_time = 0;
 }
 
-void PrintDynamicProfile() {
-  Serial.print("Duration: ");
-  Serial.print(d_profile.duration);
-  Serial.print(", Count: ");
-  Serial.print(d_profile.count);
-  Serial.print(", Delay: ");
-  Serial.print(d_profile.delay);
-  Serial.print(", Interval: ");
-  Serial.print(d_profile.interval);
-  Serial.print(", Confirmed: ");
-  Serial.println(d_profile.confirmed);
-}
 
-void SetManualFlow(unsigned char motor_state, unsigned char driver_val) {
-  motor = motor_state;
-  driver_pwm = driver_val;
+void SetManualFlow(InterfaceMessage *message) {
+  motor         = message->message.manual_flow.motor_state;
+  driver_pwm    = message->message.manual_flow.driver;
+  fan_direction = message->message.manual_flow.fan_direction;
   f_state = FanState::kSendingManualFlow;
   fan_runtime = 0;
   sample_time = 0;
 }
 
-void PrintProfile() {
-  Serial.println(String("Flow: ") + String(c_profile.flow) +
-                 String(", Duration: ") + String(c_profile.duration) +
-                 String(", Delay: ") + String(c_profile.delay));
-}
 
 uint8_t FanLoop() {
   switch (f_state) {
@@ -165,6 +139,15 @@ uint8_t FanLoop() {
   return 1;
 }
 
+SimulatorMessage runtime_flow = SimulatorMessage_init_zero;
+runtime_flow.message_type = SimulatorMessage_MessageType_kFlow;
+void PrintFlow() {
+  runtime_flow.message.flow_info.timestamp = fan_runtime;
+  runtime_flow.message.flow_info.flow = flow;
+  SendSimulatorMessage(&runtime_flow);
+}
+
+
 void SendFlow() {
   GetFlow(&sfm_res, &flow);
   if (sfm_res == Result::kOk) {
@@ -184,6 +167,9 @@ static uint64_t start_time;
 static uint64_t now;
 static AckResponse res;
 
+SimulatorMessage flow_interval = SimulatorMessage_init_zero;
+flow_interval.message_type = SimulatorMessage_MessageType_kFlowInterval;
+
 void ConfirmFlow() {
   Serial.println("confirming_flow");
   PrintDynamicProfile();
@@ -192,10 +178,10 @@ void ConfirmFlow() {
   uint8_t fail_count = 0;
 
   for (uint32_t i = 0; i < d_profile.count; i++) {
-    Serial.print("i");
-    Serial.print(i * d_profile.interval);
-    Serial.print(", f");
-    Serial.println(flow_setpoint[i]);
+
+    flow_interval.messsage.flow_info.timestamp = i * d_profile.interval;
+    flow_interval.messsage.flow_info.flow = flow_setpoint[i];
+    SendSimulatorMessage(&flow_interval)
     res = AckResponse::kStillProcessing;
     start_time = millis();
     now = start_time;
@@ -216,37 +202,38 @@ void ConfirmFlow() {
   }
   if (can_continue) {
     d_profile.confirmed = true;
-    Serial.println("done");
   } else {
     d_profile.confirmed = false;
-    Serial.println("profile_not_confirmed");
   }
   f_state = FanState::kIdle;
 }
 
-#define MAX_LEN 10
-AckResponse ProcessAck(const uint8_t in) {
-  static char input_line[MAX_LEN];
-  static unsigned int input_pos = 0;
+const unsigned int kMaxInput = 256;
+AckResponse ProcessAck(const unsigned char length) {
+  static char input_line[kMaxInput];
 
-  switch (in) {
-    case '\n': {
-      input_line[input_pos] = 0;  // terminating null byte
-      input_pos = 0;
+  for (unsigned char i = 0; i < length; i++) {
+    input_line[i] = Serial.read();
+  }
+  unsigned char end = Serial.read();
 
-      if (strncmp(input_line, "ack", 3) == 0) return AckResponse::kAck;
-      return AckResponse::kNak;
-    }
-    case '\r': {
-      return AckResponse::kStillProcessing;
-    }
-    default: {
-      // keep adding if not full ... allow for terminating null byte
-      if (input_pos < (MAX_LEN - 1)) input_line[input_pos++] = in;
-      return AckResponse::kStillProcessing;
+  istream = pb_istream_from_buffer((const pb_byte_t *)input_line, length);
+  InterfaceMessage decoded = InterfaceMessage_init_zero;
+
+  switch (decoded.message_type) {
+    case InterfaceMessage_MessageType_kAck:
+      return AckResponse::kAck;
+      break;
+    case InterfaceMessage_MessageType_kNack:
+      return AckResponse::kNack;
+      break;
+    default:
+      break;
     }
   }
 }
+
+
 
 void SetFin() {
   fin_receiving = 1;
@@ -275,7 +262,6 @@ void RunDynamicProfile() {
 
 void SendDynamicFlow() {
   if (sent_start == 0) {
-    Serial.println("start_dynamic_flow");
     fan_runtime = 0;
     sent_start = 1;
     StartPid();
@@ -289,8 +275,11 @@ void SendDynamicFlow() {
     }
   }
 
-  if (fan_runtime >= d_profile.delay) {
+  if (fan_runtime >= d_profile.trigger1_delay) {
     digitalWrite(TRIGGER1, HIGH);
+  }
+
+  if (fan_runtime >= d_profile.trigger2_delay) {
     digitalWrite(TRIGGER2, HIGH);
   }
 
@@ -320,27 +309,24 @@ void SendManualFlow() {
   }
 }
 
-void PrintFlow() {
-  Serial.print("f:");
-  Serial.print(fan_runtime);
-  Serial.print(',');
-  Serial.print(flow);
-  Serial.print(',');
-  Serial.println(driver_pwm);
-}
 
-void SetInterval(unsigned short interval, float flow) {
-  uint16_t idx = interval / d_profile.interval;
+
+bool SetDynamicFlowInterval(InterfaceMessage *message) {
+  uint32_t interval = message->message.dynamic_flow_interval.interval;
+  float flow        = message->message.dynamic_flow_interval.flow;
+  uint32_t final    = message->message.dynamic_flow_interval.final;
+
+  uint32_t idx = interval / d_profile.interval;
   flow_setpoint[idx] = flow;
-  // Serial.print(interval); Serial.print(", ");
-  // Serial.print(d_profile.interval); Serial.print(", ");
-  // Serial.print(idx); Serial.print(", ");
-  // Serial.println(flow_setpoint[idx]);
+
+  if (final){
+    SetFin();
+  }
+  return final;
 }
 
 void SendConstFlow() {
   if (sent_start == 0) {
-    Serial.println("start_flow");
     fan_runtime = 0;
     sent_start = 1;
     StartPid();
@@ -354,8 +340,11 @@ void SendConstFlow() {
     }
   }
 
-  if (fan_runtime >= c_profile.delay) {
+  if (fan_runtime >= c_profile.trigger1_delay) {
     digitalWrite(TRIGGER1, HIGH);
+  }
+
+  if (fan_runtime >= c_profile.trigger2_delay) {
     digitalWrite(TRIGGER2, HIGH);
   }
 

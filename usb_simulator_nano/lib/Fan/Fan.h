@@ -4,6 +4,7 @@
 #include <ArduinoJson.h>
 #include <enums.h>
 #include <stdint.h>
+#include <flow_definition.pb.h>
 
 #ifdef ARDUINO_TEENSY41
 #define PWM A0
@@ -29,36 +30,41 @@
 typedef struct {
   float flow;
   uint32_t duration;
-  uint16_t delay;
+  uint32_t trigger1_delay;
+  uint32_t trigger2_delay;
 } ConstProfile;
 
 typedef struct {
   uint32_t duration;
   uint32_t count;
-  uint16_t delay;
-  uint16_t interval;
+  uint32_t interval;
+  uint32_t trigger1_delay;
+  uint32_t trigger2_delay;
   bool confirmed;
 } DynamicProfile;
 
 Result InitialiseFan();
-void SetConstFlow(float flow, uint32_t dur, uint16_t delay);
-void SendConstFlow();
 uint8_t FanLoop();
-void SendFlow();
-void SendDynamicFlow();
 void PrintProfile();
 void FanGo();
 void FanStop();
 void PrintFlow();
 void StopMotor();
-void SetManualFlow(unsigned char motor_state, unsigned char driver);
-void SetDynamicFlow(unsigned int count, unsigned int delay,
-                      unsigned int duration, unsigned short interval);
-void SendManualFlow();
-void SetInterval(unsigned short interval, float flow);
+
 void SetFin();
-AckResponse ProcessAck(const uint8_t in);
+AckResponse ProcessAck(const unsigned char length);
 void ConfirmFlow();
 void ConfirmFlowProfile();
 void PrintDynamicProfile();
+
+void SetConstFlow();
+void SetManualFlow(InterfaceMessage*);
+void SetDynamicFlow(InterfaceMessage*);
+void SetDyanmicFlowInterval(InterfaceMessage*);
+
+void SendFlow();
+void SendManualFlow();
+void SendDynamicFlow();
+void SendConstFlow();
 void RunDynamicProfile();
+

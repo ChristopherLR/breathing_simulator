@@ -1,13 +1,18 @@
 #include <Arduino.h>
+#include <elapsedMillis.h>
+#include <enums.h>
+#include <fan.h>
+#include <sfm3000.h>
 #include <stdint.h>
 
-#include <ArduinoJson.h>
-#include <elapsedMillis.h>
-#include <sfm3000.h>
-#include <fan.h>
-#include <enums.h>
+#include <flow_definition.pb.h>
+#include <message_parser.h>
+#include "pb_decode.h"
+#include "pb_encode.h"
 
-#define VERSION "0.3.1"
+#define MAJOR_VERSION 0
+#define MINOR_VERSION 4
+#define PATCH_VERSION 0
 #define BAUD 115200
 #define HEARTBEAT_DELAY 500
 
@@ -18,9 +23,8 @@
 
 elapsedMillis runtime;
 
-void ProcessIncomingByte (const byte);
-SystemEvent ProcessInput(const char *);
-Result connect();
+void ProcessIncomingProto(const unsigned char);
+void ProcessInput(const char *data, const unsigned int length);
 void SendHeartbeat();
 void PrintRequest(Result res);
 void TransistionState();
@@ -28,198 +32,173 @@ void TransistionState();
 SystemEvent event = SystemEvent::kNone;
 SystemState state = SystemState::kWaitingForConnection;
 
-DynamicJsonDocument doc(1024);
-StaticJsonDocument<128> metadata;
+SimulatorMessage simulator_version = SimulatorMessage_init_zero;
+simulator_version.message_type = SimulatorMessage_MessageType_kVersionInfo;
+simulator_version.which_message = SimulatorMessage_version_info_tag; 
+simulator_version.message.version_info.major = MAJOR_VERSION;
+simulator_version.message.version_info.minor = MINOR_VERSION;
+simulator_version.message.version_info.patch = PATCH_VERSION;
+
+
 
 void setup() {
-  
   Serial.begin(BAUD);
-  while (!Serial); // wait for serial port to connect. Needed for native USB
-
+  while (!Serial); // Wait for serial connection
   InitialiseFan();
-
   analogWriteResolution(12);
-  metadata["version"] = VERSION;
-  metadata["baud"] = BAUD;
 }
 
-
 void loop() {
-  if (Serial.available()) ProcessIncomingByte(Serial.read());
+  if (Serial.available()) ProcessIncomingProto(Serial.read());
 
-  switch(state){
+  switch (state) {
     case SystemState::kWaitingForConnection:
       break;
-    case SystemState::kSendingHeartbeat: 
+    case SystemState::kSendingHeartbeat:
       SendHeartbeat();
       break;
-    case SystemState::kSendingFlow: 
-      if(FanLoop()) state = SystemState::kSendingHeartbeat;
+    case SystemState::kSendingFlow:
+      if (FanLoop()) state = SystemState::kSendingHeartbeat;
       break;
-    default: 
+    default:
       Serial.println("Unknown state");
   }
 }
 
-void ProcessIncomingByte (const uint8_t in){
-  static char input_line [BUFFER_SIZE];
-  static unsigned int input_pos = 0;
+const unsigned int kMaxInput = 256;
+void ProcessIncomingProto(const unsigned char length) {
+  static char input_line[kMaxInput];
 
-  switch (in){
-    case '\n': {
-      input_line [input_pos] = 0;  // terminating null byte
-      input_pos = 0;  
-
-      Serial.println(input_line);
-      event = ProcessInput(input_line);
-      TransistionState();
-      
-      // reset buffer for next time
-      break;
-    }
-    case '\r': {
-      break;
-    }
-    default: {
-      // keep adding if not full ... allow for terminating null byte
-      if (input_pos < (BUFFER_SIZE - 1)) input_line [input_pos++] = in;
-      break;
-    }
+  for (unsigned char i = 0; i < length; i++) {
+    input_line[i] = Serial.read();
   }
+  unsigned char end = Serial.read();
+  ProcessInput(input_line, length);
 }
 
-void TransistionState(){
-  static Result res = Result::kOk;
 
-  switch (event) {
-    case SystemEvent::kNone:
-      break;
-    case SystemEvent::kInvalid: {
-      Serial.println("Invalid event");
-      break;
-    }
-    case SystemEvent::kAttemptConnect: {
-      res = connect();
-      if (res == Result::kOk) state = SystemState::kSendingHeartbeat;
-      if (res == Result::kErr) Serial.println("Error connecting");
-      break;
-    }
-    case SystemEvent::kStartConstantFlow: {
-      Serial.println("Setting up constant flow");
-      float flow = doc["f"]   | 0.0; // Flow
-      unsigned int delay  = doc["dl"]  | 0; // Delay
-      unsigned int length = doc["d"] | 0; // Duration
+// TODO: Implement
+bool ValidVersion(InterfaceMessage * message) {
+  uint32_t major = message->message.version_info.major;
+  uint32_t minor = message->message.version_info.minor;
+  uint32_t patch = message->message.version_info.patch;
+  return true;
+}
 
-      if (flow <= 0.0 || length <= 0) {
-        res = Result::kErr;
-        Serial.print("Error setting up, flow: ");Serial.print(flow);Serial.print(", delay: ");Serial.println(length);
+bool ValidConstantFlow(InterfaceMessage * message) {
+  float flow = message->message.constant_flow.flow;
+  uint32_t duration = flow_message->message.constant_flow.duration;
+
+  if (flow > 220.0f || flow <= 0.0f || duration <= 0){
+    return false;
+  }
+  return true;
+}
+
+bool ValidDynamicFlow(InterfaceMessage * message) {
+  uint32_t duration = message->message.dynamic_flow.duration;
+  uint32_t interval = message->message.dynamic_flow.interval;
+  uint32_t count    = message->message.dynamic_flow.count;
+  if (count <= 0 || duration <= 0 || interval <= 0) {
+    return false;
+  }
+  return true;
+}
+
+// TODO: Implement
+bool ValidDynamicFlowInterval(InterfaceMessage * message) {
+  uint32_t interval = message->message.dynamic_flow_interval.interval;
+  float flow        = message->message.dynamic_flow_interval.flow;
+  uint32_t final    = message->message.dynamic_flow_interval.final;
+  return true;
+}
+
+void ProcessInput(const char *data, const unsigned int length) {
+  istream = pb_istream_from_buffer((const pb_byte_t *)data, length);
+  InterfaceMessage decoded = InterfaceMessage_init_zero;
+
+  bool status = pb_decode(&istream, InterfaceMessage_fields, &decoded);
+  if (!status) {
+    Serial.write("Failed to decode\n");
+  }
+
+  switch (decoded.message_type) {
+    case InterfaceMessage_MessageType_kVersionInfo:
+      bool compatible = ValidVersion(&decoded);
+      if (!compatible) {
+        SendSimulatorMessage(&version_error);
+      } else {
+        SendSimulatorMessage(&simulator_version);
+        state = SystemState::kSendingHeartbeat;
       }
-
-      if (res == Result::kOk) { 
-        SetConstFlow(flow, length, delay);
-        PrintProfile();
+      break;
+    case InterfaceMessage_MessageType_kConstantFlow:
+      bool valid = ValidConstantFlow(&decoded);
+      if (!valid) {
+        SendSimulatorMessage(&invalid_flow);
+      } else {
+        SetConstFlow(&decoded);
         state = SystemState::kSendingFlow;
       }
-
       break;
-    }
-    case SystemEvent::kStartManualFlow: {
-      Serial.println("Starting manual flow");
-      unsigned char motor_state = doc["ms"] | 0; // Motor State
-      unsigned char driver = doc["dv"] | 0; // Driver
-
-      SetManualFlow(motor_state, driver);
-      state = SystemState::kSendingFlow;
-      break;
-    }
-    case SystemEvent::kStartDynamicFlow: {
-      Serial.println("Receiving dynamic flow data");
-      unsigned int count = doc["c"]  | 0;
-      unsigned int delay = doc["dl"] | 0;
-      unsigned int duration = doc["d"] | 0;
-      unsigned short interval = doc["dfi"] | 0;
-
-      if (count <= 0 || duration <= 0 || interval < 5) {
-        res = Result::kErr;
-        Serial.print("Error setting up, count: ");Serial.print(count);
-        Serial.print(", delay: "); Serial.print(delay);
-        Serial.print(", interval: "); Serial.print(interval);
-        Serial.print(", duration: "); Serial.println(duration);
-      }
-
-      if (res == Result::kOk) {
-        SetDynamicFlow(count, delay, duration, interval);
+    case InterfaceMessage_MessageType_kManualFlow:
+      bool valid = ValidManualFlow(&decoded);
+      if (!valid) {
+        SendSimulatorMessage(&invalid_flow);
+      } else {
+        SetManualFlow(&decoded);
         state = SystemState::kSendingFlow;
       }
       break;
-    }
-    case SystemEvent::kConfirmDynamicFlow: {
-      ConfirmFlowProfile();
-      state = SystemState::kSendingFlow;
+    case InterfaceMessage_MessageType_kDynamicFlow:
+      bool valid = ValidDynamicFlow(&decoded);
+      if (!valid) {
+        SendSimulatorMessage(&invalid_flow);
+      } else {
+        SetDynamicFlow(&decoded);
+      }
       break;
-    }
-    case SystemEvent::kRunDynamicFlow: {
+    case InterfaceMessage_MessageType_kDynamicFlowInterval:
+      bool valid = ValidDynamicFlowInterval(&decoded);
+      if (!valid) {
+        SendSimulatorMessage(&invalid_flow_interval);
+      } else {
+        bool fin = SetDynamicFlowInterval(&decoded);
+        if (fin){
+          RunDynamicProfile();
+          state = SystemState::kSendingFlow;
+        }
+      }
+      break;
+    case InterfaceMessage_MessageType_kInformationRequest:
+      switch(decoded.message.information_request.data_type) {
+        case InformationRequest_DataType_kDynamicFlow:
+          ConfirmFlowProfile();
+          break;
+        default:
+          SendSimulatorMessage(&invalid_event);
+          break;
+      }
+      break;
+    case InterfaceMessage_MessageType_kRunDynamicFlowRequest:
       RunDynamicProfile();
       state = SystemState::kSendingFlow;
       break;
-    }
-    case SystemEvent::kReceiveDynamicFlowInterval: {
-      unsigned short interval = doc["dfi"] | 0;
-      float flow = doc["f"] | 0.0f;
-      unsigned char fin = doc["fin"] | 0;
-
-      if (fin != 0) {
-        SetFin();
-        state = SystemState::kSendingFlow;
-        Serial.println("received_fin");
-      }
-      SetInterval(interval, flow);
+    case InterfaceMessage_MessageType_kAck:
       break;
-    }
-    case SystemEvent::kEndFlow: {
-      Serial.println("Stopping system");
-
-      StopMotor();
+    case InterfaceMessage_MessageType_kNack:
       break;
-    }
     default:
-      Serial.println("Unknown request");
+      SendSimulatorMessage(&invalid_event);
+      break;
   }
-}
-
-SystemEvent ProcessInput(const char * data) {
-  if (strcmp(data, "ack") == 0) return SystemEvent::kNone;
-  if (strcmp(data, "nak") == 0) return SystemEvent::kNone;
-
-  DeserializationError err = deserializeJson(doc, data);
-
-  if (err != DeserializationError::Ok) Serial.println("Error deserialising input");
-
-  const char * type = doc["t"] | "NA";
-  // Serial.println(type);
-
-  if (strcmp(type, "NA") == 0) return SystemEvent::kInvalid;
-  if (strcmp(type, "connect") == 0) return SystemEvent::kAttemptConnect;
-  if (strcmp(type, "const") == 0) return SystemEvent::kStartConstantFlow;
-  if (strcmp(type, "dynamic") == 0) return SystemEvent::kStartDynamicFlow;
-  if (strcmp(type, "confirm") == 0) return SystemEvent::kConfirmDynamicFlow;
-  if (strcmp(type, "interval") == 0) return SystemEvent::kReceiveDynamicFlowInterval;
-  if (strcmp(type, "manual") == 0) return SystemEvent::kStartManualFlow;
-  if (strcmp(type, "run") == 0) return SystemEvent::kRunDynamicFlow;
-  
-  return SystemEvent::kInvalid;
 }
 
 void SendHeartbeat() {
-  if (runtime > 1000){
-    Serial.println("alive");
+  if (runtime > 1000) {
+    SimulatorMessage heartbeat = SimulatorMessage_init_zero;
+    heartbeat.message_type = InterfaceMessage_MessageType_kHeartbeat;
+    SendSimulatorMessage(&heartbeat);
     runtime = 0;
   }
-}
-
-Result connect() {
-  size_t len = serializeJson(metadata, Serial);
-  Serial.print("\r\n");
-  if (len > 0) return Result::kOk;
-  return Result::kErr;
 }
