@@ -29,23 +29,43 @@ void SendHeartbeat();
 void PrintRequest(Result res);
 void TransistionState();
 
-SystemEvent event = SystemEvent::kNone;
+pb_istream_t istream;
+
 SystemState state = SystemState::kWaitingForConnection;
-
+SimulatorMessage version_error = SimulatorMessage_init_zero;
+SimulatorMessage invalid_flow = SimulatorMessage_init_zero;
+SimulatorMessage invalid_flow_interval = SimulatorMessage_init_zero;
+SimulatorMessage invalid_event = SimulatorMessage_init_zero;
 SimulatorMessage simulator_version = SimulatorMessage_init_zero;
-simulator_version.message_type = SimulatorMessage_MessageType_kVersionInfo;
-simulator_version.which_message = SimulatorMessage_version_info_tag; 
-simulator_version.message.version_info.major = MAJOR_VERSION;
-simulator_version.message.version_info.minor = MINOR_VERSION;
-simulator_version.message.version_info.patch = PATCH_VERSION;
-
-
 
 void setup() {
+  InitialiseFan();
+  version_error.message_type = SimulatorMessage_MessageType_kError;
+  version_error.message.error_message = 1;
+  // version_error.message.error_message = "Version mismatch";
+
+  invalid_flow.message_type = SimulatorMessage_MessageType_kError;
+  // invalid_flow.message.error_message = "Invalid Flow";
+  invalid_flow.message.error_message = 2;
+
+  invalid_flow_interval.message_type = SimulatorMessage_MessageType_kError;
+  // invalid_flow_interval.message.error_message = "Invalid Flow Interval";
+  invalid_flow_interval.message.error_message = 3;
+
+  invalid_event.message_type = SimulatorMessage_MessageType_kError;
+  // invalid_event.message.error_message = "Invalid Event";
+  invalid_event.message.error_message = 4;
+
+  simulator_version.message_type = SimulatorMessage_MessageType_kVersionInfo;
+  simulator_version.which_message = SimulatorMessage_version_info_tag; 
+  simulator_version.message.version_info.major = MAJOR_VERSION;
+  simulator_version.message.version_info.minor = MINOR_VERSION; 
+  simulator_version.message.version_info.patch = PATCH_VERSION;
+
+  analogWriteResolution(12);
   Serial.begin(BAUD);
   while (!Serial); // Wait for serial connection
-  InitialiseFan();
-  analogWriteResolution(12);
+
 }
 
 void loop() {
@@ -86,10 +106,21 @@ bool ValidVersion(InterfaceMessage * message) {
 }
 
 bool ValidConstantFlow(InterfaceMessage * message) {
-  float flow = message->message.constant_flow.flow;
-  uint32_t duration = flow_message->message.constant_flow.duration;
+  float flow        = message->message.constant_flow.flow;
+  uint32_t duration = message->message.constant_flow.duration;
 
   if (flow > 220.0f || flow <= 0.0f || duration <= 0){
+    return false;
+  }
+  return true;
+}
+
+bool ValidManualFlow(InterfaceMessage * message) {
+  float flow            = message->message.manual_flow.flow;
+  uint32_t driver       = message->message.manual_flow.driver;
+  uint32_t motor_state  = message->message.manual_flow.motor_state;
+
+  if (flow > 220.0f || flow <= 0.0f){
     return false;
   }
   return true;
@@ -123,7 +154,7 @@ void ProcessInput(const char *data, const unsigned int length) {
   }
 
   switch (decoded.message_type) {
-    case InterfaceMessage_MessageType_kVersionInfo:
+    case InterfaceMessage_MessageType_kVersionInfo: {
       bool compatible = ValidVersion(&decoded);
       if (!compatible) {
         SendSimulatorMessage(&version_error);
@@ -132,7 +163,8 @@ void ProcessInput(const char *data, const unsigned int length) {
         state = SystemState::kSendingHeartbeat;
       }
       break;
-    case InterfaceMessage_MessageType_kConstantFlow:
+    }
+    case InterfaceMessage_MessageType_kConstantFlow: {
       bool valid = ValidConstantFlow(&decoded);
       if (!valid) {
         SendSimulatorMessage(&invalid_flow);
@@ -141,7 +173,8 @@ void ProcessInput(const char *data, const unsigned int length) {
         state = SystemState::kSendingFlow;
       }
       break;
-    case InterfaceMessage_MessageType_kManualFlow:
+    }
+    case InterfaceMessage_MessageType_kManualFlow: {
       bool valid = ValidManualFlow(&decoded);
       if (!valid) {
         SendSimulatorMessage(&invalid_flow);
@@ -150,7 +183,8 @@ void ProcessInput(const char *data, const unsigned int length) {
         state = SystemState::kSendingFlow;
       }
       break;
-    case InterfaceMessage_MessageType_kDynamicFlow:
+    }
+    case InterfaceMessage_MessageType_kDynamicFlow: { 
       bool valid = ValidDynamicFlow(&decoded);
       if (!valid) {
         SendSimulatorMessage(&invalid_flow);
@@ -158,7 +192,8 @@ void ProcessInput(const char *data, const unsigned int length) {
         SetDynamicFlow(&decoded);
       }
       break;
-    case InterfaceMessage_MessageType_kDynamicFlowInterval:
+    }
+    case InterfaceMessage_MessageType_kDynamicFlowInterval: {
       bool valid = ValidDynamicFlowInterval(&decoded);
       if (!valid) {
         SendSimulatorMessage(&invalid_flow_interval);
@@ -170,34 +205,42 @@ void ProcessInput(const char *data, const unsigned int length) {
         }
       }
       break;
-    case InterfaceMessage_MessageType_kInformationRequest:
+    }  
+    case InterfaceMessage_MessageType_kInformationRequest: {
       switch(decoded.message.information_request.data_type) {
-        case InformationRequest_DataType_kDynamicFlow:
+        case InformationRequest_DataType_kDynamicFlow:{
           ConfirmFlowProfile();
           break;
-        default:
+        }
+        default: {
           SendSimulatorMessage(&invalid_event);
           break;
+        }
       }
       break;
-    case InterfaceMessage_MessageType_kRunDynamicFlowRequest:
+    }
+    case InterfaceMessage_MessageType_kRunDynamicFlowRequest: {
       RunDynamicProfile();
       state = SystemState::kSendingFlow;
       break;
-    case InterfaceMessage_MessageType_kAck:
+    }
+    case InterfaceMessage_MessageType_kAck: {
       break;
-    case InterfaceMessage_MessageType_kNack:
+    }
+    case InterfaceMessage_MessageType_kNack: {
       break;
-    default:
+    }
+    default: {
       SendSimulatorMessage(&invalid_event);
       break;
+    }
   }
 }
 
 void SendHeartbeat() {
   if (runtime > 1000) {
     SimulatorMessage heartbeat = SimulatorMessage_init_zero;
-    heartbeat.message_type = InterfaceMessage_MessageType_kHeartbeat;
+    heartbeat.message_type = SimulatorMessage_MessageType_kHeartbeat;
     SendSimulatorMessage(&heartbeat);
     runtime = 0;
   }

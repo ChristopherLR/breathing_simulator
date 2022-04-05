@@ -45,7 +45,6 @@ typedef struct {
 
 Result InitialiseFan();
 uint8_t FanLoop();
-void PrintProfile();
 void FanGo();
 void FanStop();
 void PrintFlow();
@@ -55,12 +54,14 @@ void SetFin();
 AckResponse ProcessAck(const unsigned char length);
 void ConfirmFlow();
 void ConfirmFlowProfile();
+
+void PrintProfile();
 void PrintDynamicProfile();
 
-void SetConstFlow();
+void SetConstFlow(InterfaceMessage*);
 void SetManualFlow(InterfaceMessage*);
 void SetDynamicFlow(InterfaceMessage*);
-void SetDyanmicFlowInterval(InterfaceMessage*);
+bool SetDynamicFlowInterval(InterfaceMessage*);
 
 void SendFlow();
 void SendManualFlow();

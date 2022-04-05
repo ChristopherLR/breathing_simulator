@@ -1,19 +1,20 @@
+#include <Arduino.h>
+#include <stdint.h>
 #include <message_parser.h>
 #include <flow_definition.pb.h>
 #include "pb_decode.h"
 #include "pb_encode.h"
 
-pb_ostream_t ostream;
-pb_istream_t istream;
+static pb_ostream_t msg_ostream;
 
 void SendSimulatorMessage(SimulatorMessage *message){
   uint8_t buffer[SimulatorMessage_size];
-  ostream = pb_ostream_from_buffer(buffer, sizeof(buffer));
-  bool status = pb_encode(&ostream, SimulatorMessage_fields, message);
-  size_t written = ostream.bytes_written;
+  msg_ostream = pb_ostream_from_buffer(buffer, sizeof(buffer));
+  bool status = pb_encode(&msg_ostream, SimulatorMessage_fields, message);
+  size_t written = msg_ostream.bytes_written;
 
   if (!status) {
-    Serial.println("Failed to encode");
+    Serial.write("Failed to encode");
   }
 
   Serial.write(written);
@@ -25,12 +26,12 @@ void SendSimulatorMessage(SimulatorMessage *message){
 
 void SendInterfaceMessage(InterfaceMessage *message){
   uint8_t buffer[InterfaceMessage_size];
-  ostream = pb_ostream_from_buffer(buffer, sizeof(buffer));
-  bool status = pb_encode(&ostream, InterfaceMessage_fields, message);
-  size_t written = ostream.bytes_written;
+  msg_ostream = pb_ostream_from_buffer(buffer, sizeof(buffer));
+  bool status = pb_encode(&msg_ostream, InterfaceMessage_fields, message);
+  size_t written = msg_ostream.bytes_written;
 
   if (!status) {
-    Serial.println("Failed to encode");
+    Serial.write("Failed to encode");
   }
 
   Serial.write(written);

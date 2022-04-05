@@ -102,7 +102,7 @@ typedef struct _SimulatorMessage {
     union {
         VersionInfo version_info;
         FlowInfo flow_info;
-        pb_callback_t error_message;
+        uint32_t error_message;
     } message; 
 } SimulatorMessage;
 
@@ -206,8 +206,8 @@ X(a, STATIC,   ONEOF,    MESSAGE,  (message,information_request,message.informat
 X(a, STATIC,   SINGULAR, UENUM,    message_type,      1) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (message,version_info,message.version_info),   2) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (message,flow_info,message.flow_info),   3) \
-X(a, CALLBACK, ONEOF,    STRING,   (message,error_message,message.error_message),   4)
-#define SimulatorMessage_CALLBACK pb_default_field_callback
+X(a, STATIC,   ONEOF,    UINT32,   (message,error_message,message.error_message),   4)
+#define SimulatorMessage_CALLBACK NULL
 #define SimulatorMessage_DEFAULT NULL
 #define SimulatorMessage_message_version_info_MSGTYPE VersionInfo
 #define SimulatorMessage_message_flow_info_MSGTYPE FlowInfo
@@ -284,7 +284,6 @@ extern const pb_msgdesc_t VersionInfo_msg;
 #define VersionInfo_fields &VersionInfo_msg
 
 /* Maximum encoded size of messages (where known) */
-/* SimulatorMessage_size depends on runtime parameters */
 #define ConstantFlow_size                        23
 #define DynamicFlowInterval_size                 17
 #define DynamicFlow_size                         30
@@ -292,6 +291,7 @@ extern const pb_msgdesc_t VersionInfo_msg;
 #define InformationRequest_size                  2
 #define InterfaceMessage_size                    34
 #define ManualFlow_size                          19
+#define SimulatorMessage_size                    22
 #define VersionInfo_size                         18
 
 #ifdef __cplusplus

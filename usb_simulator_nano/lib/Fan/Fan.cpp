@@ -32,7 +32,12 @@ static uint8_t sent_start = 0;
 // PID
 const double kP = 80, kI = 0.5, kD = 0.0;
 
+SimulatorMessage runtime_flow = SimulatorMessage_init_zero;
+SimulatorMessage flow_interval = SimulatorMessage_init_zero;
+
 Result InitialiseFan() {
+  runtime_flow.message_type = SimulatorMessage_MessageType_kFlow;
+  flow_interval.message_type = SimulatorMessage_MessageType_kFlowInterval;
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT);
   pinMode(EN, OUTPUT);
@@ -82,7 +87,8 @@ void SetConstFlow(InterfaceMessage *message){
 void SetDynamicFlow(InterfaceMessage *message) {
   d_profile.duration  = message->message.dynamic_flow.duration;
   d_profile.count     = message->message.dynamic_flow.count;
-  d_profile.delay     = message->message.dynamic_flow.delay;
+  d_profile.trigger1_delay     = message->message.dynamic_flow.trigger1_delay;
+  d_profile.trigger2_delay     = message->message.dynamic_flow.trigger2_delay;
   d_profile.interval  = message->message.dynamic_flow.interval;
   d_profile.confirmed = false;
 
@@ -95,7 +101,19 @@ void SetDynamicFlow(InterfaceMessage *message) {
 void SetManualFlow(InterfaceMessage *message) {
   motor         = message->message.manual_flow.motor_state;
   driver_pwm    = message->message.manual_flow.driver;
-  fan_direction = message->message.manual_flow.fan_direction;
+  ManualFlow_FanDirection mf_fan_direction = message->message.manual_flow.fan_direction;
+
+  switch (mf_fan_direction){
+    case ManualFlow_FanDirection_kCounterClockwise: {
+      fan_direction = FanDirection::kCounterClockwise;
+      break;
+    }
+    case ManualFlow_FanDirection_kClockwise: {
+      fan_direction = FanDirection::kClockwise;
+      break;
+    }
+  }
+
   f_state = FanState::kSendingManualFlow;
   fan_runtime = 0;
   sample_time = 0;
@@ -139,14 +157,16 @@ uint8_t FanLoop() {
   return 1;
 }
 
-SimulatorMessage runtime_flow = SimulatorMessage_init_zero;
-runtime_flow.message_type = SimulatorMessage_MessageType_kFlow;
 void PrintFlow() {
   runtime_flow.message.flow_info.timestamp = fan_runtime;
   runtime_flow.message.flow_info.flow = flow;
   SendSimulatorMessage(&runtime_flow);
 }
 
+// TODO: implement
+void PrintDynamicProfile(){
+
+}
 
 void SendFlow() {
   GetFlow(&sfm_res, &flow);
@@ -167,8 +187,6 @@ static uint64_t start_time;
 static uint64_t now;
 static AckResponse res;
 
-SimulatorMessage flow_interval = SimulatorMessage_init_zero;
-flow_interval.message_type = SimulatorMessage_MessageType_kFlowInterval;
 
 void ConfirmFlow() {
   Serial.println("confirming_flow");
@@ -179,9 +197,9 @@ void ConfirmFlow() {
 
   for (uint32_t i = 0; i < d_profile.count; i++) {
 
-    flow_interval.messsage.flow_info.timestamp = i * d_profile.interval;
-    flow_interval.messsage.flow_info.flow = flow_setpoint[i];
-    SendSimulatorMessage(&flow_interval)
+    flow_interval.message.flow_info.timestamp = i * d_profile.interval;
+    flow_interval.message.flow_info.flow = flow_setpoint[i];
+    SendSimulatorMessage(&flow_interval);
     res = AckResponse::kStillProcessing;
     start_time = millis();
     now = start_time;
@@ -216,20 +234,16 @@ AckResponse ProcessAck(const unsigned char length) {
     input_line[i] = Serial.read();
   }
   unsigned char end = Serial.read();
-
-  istream = pb_istream_from_buffer((const pb_byte_t *)input_line, length);
+  pb_istream_t proc_istream = pb_istream_from_buffer((const pb_byte_t *)input_line, length);
   InterfaceMessage decoded = InterfaceMessage_init_zero;
 
   switch (decoded.message_type) {
     case InterfaceMessage_MessageType_kAck:
       return AckResponse::kAck;
-      break;
     case InterfaceMessage_MessageType_kNack:
-      return AckResponse::kNack;
-      break;
+      return AckResponse::kNak;
     default:
-      break;
-    }
+      return AckResponse::kNak;
   }
 }
 

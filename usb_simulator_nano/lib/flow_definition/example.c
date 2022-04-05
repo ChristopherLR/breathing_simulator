@@ -1,3 +1,5 @@
+/*
+
 void process_input(const char *data, const unsigned int length) { 
 
   istream = pb_istream_from_buffer((const pb_byte_t*)data, length);
@@ -70,3 +72,4 @@ void process_input(const char *data, const unsigned int length) {
   Serial.write('\n');
 
 }
+*/
