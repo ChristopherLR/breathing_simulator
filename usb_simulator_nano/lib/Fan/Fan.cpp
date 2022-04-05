@@ -7,6 +7,17 @@
 #include <enums.h>
 #include <stdint.h>
 
+#define DEBUG 1
+
+//TODO: Look at arduino-printf
+#if DEBUG == 1
+#define debug(x) Serial.print(x)
+#define debugln(x) Serial.println(x)
+#else
+#define debug(x)
+#define debugln(x)
+#endif
+
 ConstProfile c_profile = {0.0, 0, 0};
 static float flow_setpoint[1500];
 static uint8_t fin_receiving = 0;

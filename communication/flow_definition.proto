@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+message InterfaceMessage {
+  enum MessageType {
+    kConstantFlow = 0;
+    kManualFlow = 1;
+    kDynamicFlow = 2;
+  }
+  MessageType message_type = 1;
+  oneof message {
+    ConstantFlow constant_flow = 2;
+    DynamicFlow dynamic_flow = 3;
+    ManualFlow manual_flow = 4;
+  }
+}
+
+message ConstantFlow {
+  float flow = 1;
+  int32 duration = 2;
+};
+
+message ManualFlow {
+  float flow = 1;
+  int32 driver = 2;
+  enum FanDirection {
+    kClockwise = 0;
+    kCounterClockwise = 1;
+  }
+  FanDirection fan_direction = 3;
+}
+
+message DynamicFlow {
+  int32 duration = 1;
+  int32 count = 2;
+  int32 interval = 3;
+}
