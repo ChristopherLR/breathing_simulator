@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include <Servo.h>
 #include <stdint.h>
-#include <motor_controller.h>
 
 Servo motor;
 
