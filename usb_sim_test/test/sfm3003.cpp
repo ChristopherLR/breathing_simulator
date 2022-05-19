@@ -2,9 +2,9 @@
 #include <Wire.h>
 #include <stdint.h>
 
-#define OFFSET 12288
+#define OFFSET -12288
 #define SCALE 120
-#define FM_ADDRESS 0x50
+#define FM_ADDRESS 0x2D
 #define BAUD 9600
 
 void ResetSFM();
@@ -58,7 +58,7 @@ void ReadFlow() {
     msb = Wire.read();
     lsb = Wire.read();
     raw_flow = (msb << 8) | lsb;
-    flow = (raw_flow + OFFSET) / (float)SCALE;
+    flow = (raw_flow - OFFSET) / (float)SCALE;
     Serial.println(flow);
   }
 }

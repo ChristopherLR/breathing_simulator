@@ -5,10 +5,10 @@
 
 class MotorController {
  public:
-  virtual void Forward(uint16_t speed);
-  virtual void Reverse(uint16_t speed);
-  virtual void Stop();
-  virtual void Initialise();
+  virtual int Forward(uint16_t speed);
+  virtual int Reverse(uint16_t speed);
+  virtual int Stop();
+  virtual int Initialise();
 };
 
 class ServoMotorController : MotorController {
@@ -22,10 +22,10 @@ class ServoMotorController : MotorController {
     midpoint_ = midpoint;
   };
 
-  void Forward(uint16_t speed);
-  void Reverse(uint16_t speed);
-  void Initialise();
-  void Stop();
+  int Forward(uint16_t speed);
+  int Reverse(uint16_t speed);
+  int Initialise();
+  int Stop();
 
  private:
   uint16_t max_value_;
