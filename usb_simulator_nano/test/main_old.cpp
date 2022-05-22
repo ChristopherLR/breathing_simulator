@@ -5,52 +5,16 @@
 
 #include "enums.h"
 #include "fan.h"
-#include "flow_meter.h"
-#include "flow_profile.h"
-#include "motor_controller.h"
+#include "sfm3000.h"
 
-#define VERSION "0.5.0"
+#define VERSION "0.3.1"
 #define BAUD 115200
 #define HEARTBEAT_DELAY 500
-
-#define MC_SPARK 1
-#define MC_L298N 0
 
 #define BUFFER_SIZE 128
 
 #define HIGH 1
 #define LOW 0
-
-#ifdef ARDUINO_TEENSY41
-#define PWM A0
-#define EN 35
-#define IN1 36
-#define IN2 37
-#define TRIGGER1 2
-#define TRIGGER2 3
-#endif
-
-#ifdef ARDUINO_ARDUINO_NANO33BLE
-#define TRIGGER1 A1
-#define TRIGGER2 A2
-
-#if MC_SPARK
-#define SIGNAL 10
-Spark motor = Spark(SIGNAL);
-#endif
-
-#if MC_L298N
-#define SIGNAL A0
-#define EN A7
-#define IN1 A6
-#define IN2 A3
-L298N motor = L298N(IN1, IN2, EN, SIGNAL);
-#endif
-
-#endif
-
-#ifdef ARDUINO_SAMD_NANO_33_IOT
-#endif
 
 elapsedMillis runtime;
 
@@ -67,18 +31,12 @@ SystemState state = SystemState::kWaitingForConnection;
 DynamicJsonDocument doc(1024);
 StaticJsonDocument<128> metadata;
 
-SFM3003 flow_meter;
-Fan fan(motor, flow_meter, TRIGGER1, TRIGGER2);
-
-DynamicProfile dynamic_profile;
-ConstProfile const_profile;
-
 void setup() {
   Serial.begin(BAUD);
   while (!Serial)
     ;  // wait for serial port to connect. Needed for native USB
 
-  fan.Initialise();
+  InitialiseFan();
 
   analogWriteResolution(12);
   metadata["version"] = VERSION;
@@ -94,13 +52,8 @@ void loop() {
     case SystemState::kSendingHeartbeat:
       SendHeartbeat();
       break;
-    case SystemState::kSendingConstFlow:
-      if (fan.RunConstProfile(const_profile))
-        state = SystemState::kSendingHeartbeat;
-      break;
-    case SystemState::kSendingDynamicFlow:
-      if (fan.RunDynamicProfile(dynamic_profile))
-        state = SystemState::kSendingHeartbeat;
+    case SystemState::kSendingFlow:
+      if (FanLoop()) state = SystemState::kSendingHeartbeat;
       break;
     default:
       Serial.println("Unknown state");
@@ -151,23 +104,34 @@ void TransistionState() {
       break;
     }
     case SystemEvent::kStartConstantFlow: {
-      Serial.println("Receiving constant flow data");
-      float flow = doc["f"] | -200.0;      // Flow
+      Serial.println("Setting up constant flow");
+      float flow = doc["f"] | 0.0;         // Flow
       unsigned int delay = doc["dl"] | 0;  // Delay
       unsigned int length = doc["d"] | 0;  // Duration
 
-      const_profile = ConstProfile(flow, length);
-      fan.SetTrigger1Delay(delay);
-      fan.SetTrigger2Delay(delay);
-
-      if (const_profile.Invalid()) {
+      if (flow <= 0.0 || length <= 0) {
+        res = Result::kErr;
         Serial.print("Error setting up, flow: ");
-      } else {
-        fan.Prepare();
-        state = SystemState::kSendingConstFlow;
+        Serial.print(flow);
+        Serial.print(", delay: ");
+        Serial.println(length);
       }
-      const_profile.Print();
 
+      if (res == Result::kOk) {
+        SetConstFlow(flow, length, delay);
+        PrintProfile();
+        state = SystemState::kSendingFlow;
+      }
+
+      break;
+    }
+    case SystemEvent::kStartManualFlow: {
+      Serial.println("Starting manual flow");
+      unsigned char motor_state = doc["ms"] | 0;  // Motor State
+      unsigned char driver = doc["dv"] | 0;       // Driver
+
+      SetManualFlow(motor_state, driver);
+      state = SystemState::kSendingFlow;
       break;
     }
     case SystemEvent::kStartDynamicFlow: {
@@ -177,33 +141,32 @@ void TransistionState() {
       unsigned int duration = doc["d"] | 0;
       unsigned short interval = doc["dfi"] | 0;
 
-      dynamic_profile = DynamicProfile(count, interval, duration);
-      fan.SetTrigger1Delay(delay);
-      fan.SetTrigger2Delay(delay);
-
-      if (dynamic_profile.Invalid()) {
-        Serial.print("Error setting up : ");
+      if (count <= 0 || duration <= 0 || interval < 5) {
+        res = Result::kErr;
+        Serial.print("Error setting up, count: ");
+        Serial.print(count);
+        Serial.print(", delay: ");
+        Serial.print(delay);
+        Serial.print(", interval: ");
+        Serial.print(interval);
+        Serial.print(", duration: ");
+        Serial.println(duration);
       }
 
-      dynamic_profile.Print();
-
+      if (res == Result::kOk) {
+        SetDynamicFlow(count, delay, duration, interval);
+        state = SystemState::kSendingFlow;
+      }
       break;
     }
     case SystemEvent::kConfirmDynamicFlow: {
-      uint8_t err;
-      err = dynamic_profile.Confirm();
-      if (err) {
-        Serial.print("Dynamic Flow Confirmation Error: ");
-        Serial.println(err);
-      } else {
-        state = SystemState::kSendingDynamicFlow;
-        fan.Prepare();
-      }
+      ConfirmFlowProfile();
+      state = SystemState::kSendingFlow;
       break;
     }
     case SystemEvent::kRunDynamicFlow: {
-      fan.Prepare();
-      state = SystemState::kSendingDynamicFlow;
+      RunDynamicProfile();
+      state = SystemState::kSendingFlow;
       break;
     }
     case SystemEvent::kReceiveDynamicFlowInterval: {
@@ -212,15 +175,17 @@ void TransistionState() {
       unsigned char fin = doc["fin"] | 0;
 
       if (fin != 0) {
-        state = SystemState::kSendingDynamicFlow;
+        SetFin();
+        state = SystemState::kSendingFlow;
         Serial.println("received_fin");
       }
-      dynamic_profile.SetInterval(interval, flow);
+      SetInterval(interval, flow);
       break;
     }
     case SystemEvent::kEndFlow: {
       Serial.println("Stopping system");
-      fan.Stop();
+
+      StopMotor();
       break;
     }
     default:
@@ -247,6 +212,7 @@ SystemEvent ProcessInput(const char *data) {
   if (strcmp(type, "confirm") == 0) return SystemEvent::kConfirmDynamicFlow;
   if (strcmp(type, "interval") == 0)
     return SystemEvent::kReceiveDynamicFlowInterval;
+  if (strcmp(type, "manual") == 0) return SystemEvent::kStartManualFlow;
   if (strcmp(type, "run") == 0) return SystemEvent::kRunDynamicFlow;
 
   return SystemEvent::kInvalid;

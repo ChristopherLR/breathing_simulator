@@ -2,23 +2,25 @@
 
 #include <stdint.h>
 
-#include "enums.h"
-
 #define MAX_PWM 4095
 
-typedef struct {
-  float *input;
-  float setpoint;
-  uint16_t *output;
-  double kp;
-  double ki;
-  double kd;
-  uint16_t hit_start;
-  FanDirection *fan_direction;
-} PidState;
+class Pid {
+ public:
+  Pid() : sample_time_(5){};
+  void Initialise();
+  double kP = 80.0;
+  double kI = 0.5;
+  double kD = 0.0;
+  double Compute(double input);
+  void Start();
+  void SetSetpoint(double setpoint);
 
-void InitialisePid(float *input, uint16_t *output, double kp, double ki,
-                   double kd, FanDirection *fan_direction);
-void SetSetpoint(float setpoint);
-void ComputePid();
-void StartPid();
+ private:
+  uint8_t sample_time_;
+  uint8_t hit_start_;
+  uint64_t last_time_;
+  double output_sum_;
+  double last_input_;
+  double last_output_;
+  double setpoint_;
+};

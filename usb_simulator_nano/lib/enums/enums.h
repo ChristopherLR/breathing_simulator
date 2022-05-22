@@ -3,7 +3,8 @@
 typedef enum {
   kWaitingForConnection,
   kSendingHeartbeat,
-  kSendingFlow,
+  kSendingDynamicFlow,
+  kSendingConstFlow,
 } SystemState;
 
 typedef enum {
@@ -11,7 +12,6 @@ typedef enum {
   kNone,
   kAttemptConnect,
   kStartConstantFlow,
-  kStartManualFlow,
   kStartDynamicFlow,
   kReceiveDynamicFlowInterval,
   kEndFlow,
@@ -23,24 +23,3 @@ typedef enum {
   kOk,
   kErr,
 } Result;
-
-typedef enum {
-  kStillProcessing,
-  kAck,
-  kNak,
-} AckResponse;
-
-typedef enum {
-  kSendingConstantFlow,
-  kSendingDynamicFlow,
-  kSendingManualFlow,
-  kWaitingForFlowEnd,
-  kReceivingDynamicFlow,
-  kConfirmingFlow,
-  kIdle,
-} FanState;
-
-typedef enum {
-  kClockwise,
-  kCounterClockwise,
-} FanDirection;

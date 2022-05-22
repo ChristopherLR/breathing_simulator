@@ -2,63 +2,44 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <elapsedMillis.h>
 #include <enums.h>
 #include <stdint.h>
 
-#ifdef ARDUINO_TEENSY41
-#define PWM A0
-#define EN 35
-#define IN1 36
-#define IN2 37
-#define TRIGGER1 2
-#define TRIGGER2 3
-#endif
+#include "flow_meter.h"
+#include "flow_profile.h"
+#include "motor_controller.h"
+#include "pid.h"
 
-#ifdef ARDUINO_ARDUINO_NANO33BLE
-#define PWM A0
-#define EN A7
-#define IN1 A6
-#define IN2 A3
-#define TRIGGER1 A1
-#define TRIGGER2 A2
-#endif
+class Fan {
+ public:
+  Fan(MotorController& mc, FlowMeter& fm, uint8_t trigger1, uint8_t trigger2)
+      : motor_(mc),
+        flow_meter_(fm),
+        trigger1_(trigger1),
+        trigger2_(trigger2),
+        print_interval_(5){};
 
-#ifdef ARDUINO_SAMD_NANO_33_IOT
-#endif
+  uint8_t Initialise();
+  uint8_t RunConstProfile(ConstProfile& profile);
+  uint8_t RunDynamicProfile(DynamicProfile& profile);
+  void SetTrigger1Delay(uint16_t delay) { trigger1_delay_ = delay; };
+  void SetTrigger2Delay(uint16_t delay) { trigger2_delay_ = delay; };
+  void Prepare();
+  void Stop();
 
-typedef struct {
-  float flow;
-  uint32_t duration;
-  uint16_t delay;
-} ConstProfile;
+  elapsedMillis fan_runtime;
+  elapsedMillis sample_time;
 
-typedef struct {
-  uint32_t duration;
-  uint32_t count;
-  uint16_t delay;
-  uint16_t interval;
-  bool confirmed;
-} DynamicProfile;
-
-Result InitialiseFan();
-void SetConstFlow(float flow, uint32_t dur, uint16_t delay);
-void SendConstFlow();
-uint8_t FanLoop();
-void SendFlow();
-void SendDynamicFlow();
-void PrintProfile();
-void FanGo();
-void FanStop();
-void PrintFlow();
-void StopMotor();
-void SetManualFlow(unsigned char motor_state, unsigned char driver);
-void SetDynamicFlow(unsigned int count, unsigned int delay,
-                      unsigned int duration, unsigned short interval);
-void SendManualFlow();
-void SetInterval(unsigned short interval, float flow);
-void SetFin();
-AckResponse ProcessAck(const uint8_t in);
-void ConfirmFlow();
-void ConfirmFlowProfile();
-void PrintDynamicProfile();
-void RunDynamicProfile();
+ private:
+  MotorController& motor_;
+  FlowMeter& flow_meter_;
+  uint8_t trigger1_;
+  uint8_t trigger2_;
+  uint8_t print_interval_;
+  uint16_t trigger1_delay_;
+  uint16_t trigger2_delay_;
+  uint8_t sent_start_;
+  uint8_t waiting_for_end_;
+  Pid pid_;
+};
