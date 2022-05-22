@@ -4,7 +4,7 @@
 
 #define OFFSET 12288
 #define SCALE 120
-#define FM_ADDRESS 0x50
+#define FM_ADDRESS 0x40
 #define BAUD 9600
 
 void ResetSFM();

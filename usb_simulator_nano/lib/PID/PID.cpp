@@ -9,19 +9,20 @@ void Pid::Start() {
   last_time_ = millis();
   last_input_ = 0.0;
   last_output_ = 0.0;
+  output_sum_ = 0.0;
 }
-
-void Pid::SetSetpoint(double setpoint) { setpoint_ = setpoint; }
 
 // Look into feed forward
 // Kalman filters
 double Pid::Compute(double input) {
   uint64_t now = millis();
   uint64_t time_delta = now - last_time_;
-  if (time_delta < sample_time_) return last_output_;
 
   double err = setpoint_ - input;
+
   if (err < 0) hit_start_ = 1;
+
+  if (time_delta < sample_time_) return last_output_;
 
   double input_delta = input - last_input_;
 

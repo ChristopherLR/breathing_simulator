@@ -13,8 +13,10 @@
 #define BAUD 115200
 #define HEARTBEAT_DELAY 500
 
-#define MC_SPARK 1
-#define MC_L298N 0
+#define MC_SPARK 0
+#define MC_L298N 1
+#define FM_SFM3003 0
+#define FM_SFM3000 1
 
 #define BUFFER_SIZE 128
 
@@ -47,6 +49,14 @@ Spark motor = Spark(SIGNAL);
 L298N motor = L298N(IN1, IN2, EN, SIGNAL);
 #endif
 
+#if FM_SFM3000
+SFM3000 flow_meter;
+#endif
+
+#if FM_SFM3003
+SFM3003 flow_meter;
+#endif
+
 #endif
 
 #ifdef ARDUINO_SAMD_NANO_33_IOT
@@ -67,7 +77,6 @@ SystemState state = SystemState::kWaitingForConnection;
 DynamicJsonDocument doc(1024);
 StaticJsonDocument<128> metadata;
 
-SFM3003 flow_meter;
 Fan fan(motor, flow_meter, TRIGGER1, TRIGGER2);
 
 DynamicProfile dynamic_profile;
@@ -211,10 +220,6 @@ void TransistionState() {
       float flow = doc["f"] | 0.0f;
       unsigned char fin = doc["fin"] | 0;
 
-      if (fin != 0) {
-        state = SystemState::kSendingDynamicFlow;
-        Serial.println("received_fin");
-      }
       dynamic_profile.SetInterval(interval, flow);
       break;
     }

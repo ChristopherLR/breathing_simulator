@@ -13,7 +13,8 @@ class Pid {
   double kD = 0.0;
   double Compute(double input);
   void Start();
-  void SetSetpoint(double setpoint);
+  void SetSetpoint(double setpoint) { setpoint_ = setpoint; };
+  void SetInitialOutput(double output) { initial_output_ = output; };
 
  private:
   uint8_t sample_time_;
@@ -23,4 +24,5 @@ class Pid {
   double last_input_;
   double last_output_;
   double setpoint_;
+  double initial_output_;
 };

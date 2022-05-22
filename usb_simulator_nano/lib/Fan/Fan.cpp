@@ -57,7 +57,7 @@ uint8_t Fan::RunConstProfile(ConstProfile& profile) {
     Serial.print("f:");
     Serial.print(fan_runtime);
     Serial.print(',');
-    Serial.print(flow);
+    Serial.println(flow);
     sample_time = 0;
   }
   if (fan_runtime >= trigger1_delay_) digitalWrite(trigger1_, HIGH);
@@ -89,6 +89,7 @@ uint8_t Fan::RunDynamicProfile(DynamicProfile& profile) {
   if (sent_start_ == 0) {
     Serial.println("start_dynamic_flow");
     fan_runtime = 0;
+    waiting_for_end_ = 0;
     sent_start_ = 1;
     pid_.Start();
   }
@@ -99,7 +100,7 @@ uint8_t Fan::RunDynamicProfile(DynamicProfile& profile) {
     Serial.print("f:");
     Serial.print(fan_runtime);
     Serial.print(',');
-    Serial.print(flow);
+    Serial.println(flow);
     sample_time = 0;
   }
   if (fan_runtime >= trigger1_delay_) digitalWrite(trigger1_, HIGH);

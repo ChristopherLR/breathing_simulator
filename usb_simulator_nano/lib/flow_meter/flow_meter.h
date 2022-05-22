@@ -31,7 +31,7 @@ class SFM3003 : public FlowMeter {
 
  private:
   const int32_t offset_ = -12288;
-  const float scale_ = 120;
+  const float scale_ = 120.0;
   const uint8_t address_ = 0x2D;
   uint8_t StartConstMeasurement();
 };
@@ -53,7 +53,7 @@ class SFM3000 : public FlowMeter {
 
  private:
   const int32_t offset_ = 32000;
-  const float scale_ = 140;
+  const float scale_ = 140.0;
   const uint8_t address_ = 0x40;
   uint8_t StartConstMeasurement();
 };

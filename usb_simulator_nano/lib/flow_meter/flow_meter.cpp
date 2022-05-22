@@ -31,14 +31,14 @@ uint8_t SFM3003::StartConstMeasurement() {
 
 uint8_t SFM3003::GetFlow(float* res) {
   char avail = Wire.requestFrom(address_, 2);
-  static int16_t raw_flow;
+  static uint16_t raw_flow;
   static uint8_t lsb;
 
   if (avail == 2) {
     raw_flow = Wire.read();
     lsb = Wire.read();
     raw_flow = (raw_flow << 8) | lsb;
-    *res = (raw_flow - offset_) / (float)scale_;
+    *res = ((float)raw_flow - offset_) / scale_;
     return 0;
   }
   return 1;
@@ -72,14 +72,14 @@ uint8_t SFM3000::StartConstMeasurement() {
 
 uint8_t SFM3000::GetFlow(float* res) {
   char avail = Wire.requestFrom(address_, 2);
-  static int16_t raw_flow;
+  static uint16_t raw_flow;
   static uint8_t lsb;
 
   if (avail == 2) {
     raw_flow = Wire.read();
     lsb = Wire.read();
     raw_flow = (raw_flow << 8) | lsb;
-    *res = (raw_flow - offset_) / (float)scale_;
+    *res = ((float)raw_flow - offset_) / scale_;
     return 0;
   }
   return 1;
