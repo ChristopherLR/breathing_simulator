@@ -23,3 +23,15 @@ void ServoMotorController::Reverse(uint16_t speed) {
 }
 
 void ServoMotorController::Stop() { motor_.writeMicroseconds(midpoint_); }
+
+void Calibrate() {
+  for (int i = 500; i <= 2500; i += 10) {
+    motor.writeMicroseconds(i);
+    delay(100);
+    Serial.print("p: ");
+    Serial.println(i);
+  }
+
+  motor.writeMicroseconds(1500);
+  Serial.println("fin");
+}

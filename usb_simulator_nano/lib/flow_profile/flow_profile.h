@@ -43,5 +43,5 @@ class DynamicProfile {
   uint16_t interval_;
   uint32_t duration_;
   uint8_t confirmed_;
-  float flow_setpoint_[1500];
+  float flow_setpoint_[10000];
 };

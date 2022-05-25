@@ -31,7 +31,7 @@ uint8_t SFM3003::StartConstMeasurement() {
 
 uint8_t SFM3003::GetFlow(float* res) {
   char avail = Wire.requestFrom(address_, 2);
-  static uint16_t raw_flow;
+  static int16_t raw_flow;
   static uint8_t lsb;
 
   if (avail == 2) {

@@ -2,69 +2,69 @@
 #include <Servo.h>
 #include <stdint.h>
 
-Servo motor;
+#include "flow_meter.h"
 
+Servo motor;
+SFM3003 fm;
+
+void ProcessInputLine(const char* data);
 void ProcessIncomingByte(const unsigned char data);
-void ProcessInputLine();
 
 int motor_val = 0;
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
+  while (!Serial)
+    ;
+  Serial.println("SPARK TEST");
+  fm.Initialise();
   motor.attach(10);
 }
 
+uint8_t err;
+float flow;
+
 void loop() {
-  while (Serial.available() > 0){
-    ProcessIncomingByte(Serial.read());
+  while (Serial.available() > 0) ProcessIncomingByte(Serial.read());
+
+  err = fm.GetFlow(&flow);
+  if (!err) {
+    Serial.print("Flow: ");
+    Serial.print(flow);
+    Serial.print(", Motor: ");
+    Serial.println(motor_val);
+    delay(50);
   }
 }
 
-void ProcessInputLine(const char * data){
+void ProcessInputLine(const char* data) {
   String dat = String(data);
   motor_val = dat.toInt();
-  Serial.println(motor_val);
   motor.writeMicroseconds(motor_val);
 }
 
-void Calibrate(){
-  for (int i = 500; i <= 2500; i+= 10){
-    motor.writeMicroseconds(i);
-    delay(100);
-    Serial.print("p: "); Serial.println(i);
-  }
-
-  motor.writeMicroseconds(1500);
-  Serial.println("fin");
-}
-
 const unsigned int MAX_INPUT = 50;
-void ProcessIncomingByte(const unsigned char in){
-  static char input_line [MAX_INPUT];
+void ProcessIncomingByte(const unsigned char in) {
+  static char input_line[MAX_INPUT];
   static unsigned int input_pos = 0;
   Serial.print((char)in);
 
-  switch (in){
-    case 'p':
-      Calibrate();
-      break;
-
-    case '\n':   // end of text
-      input_line [input_pos] = 0;  // terminating null byte
+  switch (in) {
+    case '\n':                    // end of text
+      input_line[input_pos] = 0;  // terminating null byte
 
       ProcessInputLine(input_line);
-      
+
       // reset buffer for next time
-      input_pos = 0;  
+      input_pos = 0;
       break;
 
-    case '\r':   // discard carriage return
+    case '\r':  // discard carriage return
       break;
 
     default:
       // keep adding if not full ... allow for terminating null byte
-      if (input_pos < (MAX_INPUT - 1))
-        input_line [input_pos++] = in;
+      if (input_pos < (MAX_INPUT - 1)) input_line[input_pos++] = in;
       break;
-    }
+  }
 }

@@ -17,6 +17,7 @@ typedef enum {
   kEndFlow,
   kConfirmDynamicFlow,
   kRunDynamicFlow,
+  kSetPid,
 } SystemEvent;
 
 typedef enum {

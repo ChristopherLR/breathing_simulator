@@ -3,20 +3,38 @@
 #include <elapsedMillis.h>
 #include <stdint.h>
 
+#include "configuration.h"
 #include "enums.h"
 #include "fan.h"
 #include "flow_meter.h"
 #include "flow_profile.h"
 #include "motor_controller.h"
+#include "pid.h"
 
 #define VERSION "0.5.0"
 #define BAUD 115200
 #define HEARTBEAT_DELAY 500
+#define DEBUG 0
 
-#define MC_SPARK 0
-#define MC_L298N 1
-#define FM_SFM3003 0
-#define FM_SFM3000 1
+#if DEBUG
+#define DBG(x) Serial.println(x)
+#else
+#define DBG(x)
+#endif
+
+#if FM_SFM3000
+SFM3000 flow_meter;
+#elif FM_SFM3003
+SFM3003 flow_meter;
+#endif
+
+#if FAN_VACUUM
+#define FAN_NAME "vacuum"
+#elif FAN_9HV0412P3K001
+#define FAN_NAME "9hv"
+#elif FAN_IMPELLER
+#define FAN_NAME "impeller"
+#endif
 
 #define BUFFER_SIZE 128
 
@@ -24,12 +42,23 @@
 #define LOW 0
 
 #ifdef ARDUINO_TEENSY41
-#define PWM A0
+#if MC_L298N
+#define SIGNAL A0
 #define EN 35
 #define IN1 36
 #define IN2 37
 #define TRIGGER1 2
 #define TRIGGER2 3
+#define MAX_VALUE 2700  // 16V (4096), 12V (3000)
+
+L298N motor = L298N(IN1, IN2, EN, SIGNAL, MAX_VALUE);
+#if FAN_VACUUM
+#define REVERSIBLE 1
+#define KP 150.0
+#define KI 0.15
+#define KD 0.0
+#endif
+#endif
 #endif
 
 #ifdef ARDUINO_ARDUINO_NANO33BLE
@@ -38,7 +67,24 @@
 
 #if MC_SPARK
 #define SIGNAL 10
-Spark motor = Spark(SIGNAL);
+#define MAX_VALUE 650                    // 16V (1000), 12V (750), 9V (650)
+Spark motor = Spark(SIGNAL, MAX_VALUE);  // 750
+#if FAN_VACUUM
+#define KP 4.5
+#define KI 0.225
+#define KD 0.8
+#define REVERSIBLE 1
+#elif FAN_IMPELLER
+#define KP 10
+#define KI 0.2
+#define KD 0.0
+#define REVERSIBLE 1
+#elif FAN_9HV0412P3K001
+#define KP 40.5
+#define KI 0.05
+#define KD 0.8
+#define REVERSIBLE 0
+#endif
 #endif
 
 #if MC_L298N
@@ -46,15 +92,26 @@ Spark motor = Spark(SIGNAL);
 #define EN A7
 #define IN1 A6
 #define IN2 A3
-L298N motor = L298N(IN1, IN2, EN, SIGNAL);
-#endif
+#define MAX_VALUE 4096  // 16V (4096), 12V (3000)
 
-#if FM_SFM3000
-SFM3000 flow_meter;
-#endif
+L298N motor = L298N(IN1, IN2, EN, SIGNAL, MAX_VALUE);
 
-#if FM_SFM3003
-SFM3003 flow_meter;
+#if FAN_VACUUM
+#define REVERSIBLE 1
+#define KP 150
+#define KI 0.15
+#define KD 0.0
+#elif FAN_9HV0412P3K001
+#define REVERSIBLE 0
+#define KP 80.0
+#define KI 0.5
+#define KD 0.0
+#elif FAN_IMPELLER
+#define REVERSIBLE 1
+#define KP 80.0
+#define KI 0.5
+#define KD 0.0
+#endif
 #endif
 
 #endif
@@ -75,12 +132,14 @@ SystemEvent event = SystemEvent::kNone;
 SystemState state = SystemState::kWaitingForConnection;
 
 DynamicJsonDocument doc(1024);
+DynamicJsonDocument pid_info(64);
 StaticJsonDocument<128> metadata;
-
-Fan fan(motor, flow_meter, TRIGGER1, TRIGGER2);
 
 DynamicProfile dynamic_profile;
 ConstProfile const_profile;
+
+Pid pid = Pid(KP, KI, KD);
+Fan fan(motor, flow_meter, pid, TRIGGER1, TRIGGER2, REVERSIBLE);
 
 void setup() {
   Serial.begin(BAUD);
@@ -92,6 +151,13 @@ void setup() {
   analogWriteResolution(12);
   metadata["version"] = VERSION;
   metadata["baud"] = BAUD;
+  metadata["fan"] = FAN_NAME;
+  metadata["kP"] = KP;
+  metadata["kI"] = KI;
+  metadata["kD"] = KD;
+  metadata["mc"] = motor.name;
+  metadata["fm"] = flow_meter.name;
+  metadata["max"] = MAX_VALUE;
 }
 
 void loop() {
@@ -125,7 +191,7 @@ void ProcessIncomingByte(const uint8_t in) {
       input_line[input_pos] = 0;  // terminating null byte
       input_pos = 0;
 
-      Serial.println(input_line);
+      DBG(input_line);
       event = ProcessInput(input_line);
       TransistionState();
 
@@ -160,7 +226,7 @@ void TransistionState() {
       break;
     }
     case SystemEvent::kStartConstantFlow: {
-      Serial.println("Receiving constant flow data");
+      DBG("Receiving constant flow data");
       float flow = doc["f"] | -200.0;      // Flow
       unsigned int delay = doc["dl"] | 0;  // Delay
       unsigned int length = doc["d"] | 0;  // Duration
@@ -180,7 +246,7 @@ void TransistionState() {
       break;
     }
     case SystemEvent::kStartDynamicFlow: {
-      Serial.println("Receiving dynamic flow data");
+      DBG("Receiving dynamic flow data");
       unsigned int count = doc["c"] | 0;
       unsigned int delay = doc["dl"] | 0;
       unsigned int duration = doc["d"] | 0;
@@ -190,9 +256,7 @@ void TransistionState() {
       fan.SetTrigger1Delay(delay);
       fan.SetTrigger2Delay(delay);
 
-      if (dynamic_profile.Invalid()) {
-        Serial.print("Error setting up : ");
-      }
+      if (dynamic_profile.Invalid()) Serial.print("Error setting up : ");
 
       dynamic_profile.Print();
 
@@ -228,6 +292,20 @@ void TransistionState() {
       fan.Stop();
       break;
     }
+    case SystemEvent::kSetPid: {
+      double p = doc["kP"] | KP;
+      double i = doc["kI"] | KI;
+      double d = doc["kD"] | KD;
+      pid.SetPid(p, i, d);
+
+      pid_info["kP"] = p;
+      pid_info["kI"] = i;
+      pid_info["kD"] = d;
+      serializeJson(pid_info, Serial);
+      Serial.print("\r\n");
+
+      break;
+    }
     default:
       Serial.println("Unknown request");
   }
@@ -250,6 +328,7 @@ SystemEvent ProcessInput(const char *data) {
   if (strcmp(type, "const") == 0) return SystemEvent::kStartConstantFlow;
   if (strcmp(type, "dynamic") == 0) return SystemEvent::kStartDynamicFlow;
   if (strcmp(type, "confirm") == 0) return SystemEvent::kConfirmDynamicFlow;
+  if (strcmp(type, "pid") == 0) return SystemEvent::kSetPid;
   if (strcmp(type, "interval") == 0)
     return SystemEvent::kReceiveDynamicFlowInterval;
   if (strcmp(type, "run") == 0) return SystemEvent::kRunDynamicFlow;

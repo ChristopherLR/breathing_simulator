@@ -38,7 +38,48 @@ uint8_t SFM3003::GetFlow(float* res) {
     raw_flow = Wire.read();
     lsb = Wire.read();
     raw_flow = (raw_flow << 8) | lsb;
-    *res = (raw_flow - offset_) / (float)scale_;
+    *res = ((float)raw_flow - offset_) / scale_;
+    return 0;
+  }
+  return 1;
+}
+
+uint8_t SFM3000::Initialise() {
+  Wire.begin();
+  uint8_t err = 0;
+  err = SFM3000::Reset();
+  if (err != 0) return 1;
+  err = SFM3000::StartConstMeasurement();
+  if (err != 0) return 2;
+  return 0;
+}
+
+uint8_t SFM3000::Reset() {
+  Wire.beginTransmission(address_);
+  Wire.write(0x20);
+  Wire.write(0x00);
+  Wire.endTransmission();
+  return 0;
+}
+
+uint8_t SFM3000::StartConstMeasurement() {
+  Wire.beginTransmission(address_);
+  Wire.write(0x10);
+  Wire.write(0x00);
+  Wire.endTransmission();
+  return 0;
+}
+
+uint8_t SFM3000::GetFlow(float* res) {
+  char avail = Wire.requestFrom(address_, 2);
+  static uint16_t raw_flow;
+  static uint8_t lsb;
+
+  if (avail == 2) {
+    raw_flow = Wire.read();
+    lsb = Wire.read();
+    raw_flow = (raw_flow << 8) | lsb;
+    *res = ((float)raw_flow - offset_) / scale_;
     return 0;
   }
   return 1;

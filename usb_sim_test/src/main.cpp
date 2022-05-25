@@ -1,61 +1,124 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <elapsedMillis.h>
 #include <stdint.h>
 
-#define OFFSET 32000
-#define SCALE 140.0
-#define FM_ADDRESS 0x40
-#define BAUD 9600
+#include "flow_meter.h"
 
-void ResetSFM();
-void StartConstMeasurement();
-void StopConstMeasurement();
-void ReadFlow();
+#define BAUD 115200
+#define HEARTBEAT_DELAY 500
+#define BUFFER_SIZE 64
+
+#define LOW 0
+#define HIGH 1
+
+#ifdef ARDUINO_TEENSY41
+#define SIGNAL A0
+#define EN 35
+#define IN1 36
+#define IN2 37
+#endif
+
+#if defined(ARDUINO_ARDUINO_NANO33BLE) || defined(ARDUINO_SAMD_NANO_33_IOT)
+#define SIGNAL A0
+#define EN A7
+#define IN1 A6
+#define IN2 A3
+#endif
+
+#ifdef TARGET_RP2040
+#define SIGNAL 19
+#define EN 18
+#define IN1 17
+#define IN2 16
+#endif
+
+elapsedMillis runtime;
+elapsedMillis timer;
+SFM3000 fm;
+
+char buf[BUFFER_SIZE];
+
+void process_input(const char *);
+void process_incoming_byte(const byte);
 
 void setup() {
   Wire.begin();
   Serial.begin(BAUD);
+  analogWriteResolution(12);
+
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(EN, OUTPUT);
+  pinMode(SIGNAL, OUTPUT);
+
+  digitalWrite(EN, LOW);
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
 
   while (!Serial)
-    ;
-
-  Serial.println("TEST");
-
-  ResetSFM();
-  StartConstMeasurement();
-  delay(10);
+    ;  // wait for serial port to connect. Needed for native USB
+  fm.Initialise();
 }
 
-void ResetSFM() {
-  Wire.beginTransmission(FM_ADDRESS);
-  Wire.write(0x20);
-  Wire.write(0x00);
-  Wire.endTransmission();
-}
-
-void StartConstMeasurement() {
-  Wire.beginTransmission(FM_ADDRESS);
-  Wire.write(0x10);
-  Wire.write(0x00);
-  Wire.endTransmission();
-}
-
-void ReadFlow() {
-  char avail = Wire.requestFrom(FM_ADDRESS, 2);
-  static uint16_t raw_flow;
-  static uint8_t lsb;
-  static float flow;
-
-  if (avail == 2) {
-    raw_flow = Wire.read();
-    lsb = Wire.read();
-    raw_flow = (raw_flow << 8) | lsb;
-    flow = ((float)raw_flow - OFFSET) / SCALE;
-    Serial.println(flow);
-  }
-}
+uint8_t err;
+float flow;
+uint8_t reset = 0;
+uint16_t driver_pwm = 0;
 
 void loop() {
-  delay(10);
-  ReadFlow();
+  while (Serial.available() > 0) process_incoming_byte(Serial.read());
+
+  err = fm.GetFlow(&flow);
+  if (!err) {
+    Serial.print("P: ");
+    Serial.print(driver_pwm);
+    Serial.print(", F: ");
+    Serial.print(flow);
+    Serial.print(", T: ");
+    Serial.println(timer);
+  } else {
+    Serial.println("Test");
+    delay(50);
+  }
+  delay(50);
+}
+
+void process_input(const char *data) {
+  String dat = String(data + 1);
+  driver_pwm = (uint16_t)dat.toInt();
+  if (data[0] == 'p') {
+    digitalWrite(EN, HIGH);
+    digitalWrite(IN1, HIGH);
+    digitalWrite(IN2, LOW);
+    analogWrite(SIGNAL, driver_pwm);
+    timer = 0;
+  }
+  if (data[0] == 'n') {
+    digitalWrite(EN, LOW);
+  }
+}
+const unsigned int MAX_INPUT = 50;
+void process_incoming_byte(const byte inByte) {
+  static char input_line[MAX_INPUT];
+  static unsigned int input_pos = 0;
+
+  switch (inByte) {
+    case '\n':                    // end of text
+      input_line[input_pos] = 0;  // terminating null byte
+
+      process_input(input_line);
+
+      // reset buffer for next time
+      input_pos = 0;
+      break;
+
+    case '\r':  // discard carriage return
+      break;
+
+    default:
+      // keep adding if not full ... allow for terminating null byte
+      if (input_pos < (MAX_INPUT - 1)) input_line[input_pos++] = inByte;
+      break;
+  }
 }

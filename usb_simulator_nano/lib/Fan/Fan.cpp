@@ -17,7 +17,6 @@ uint8_t Fan::Initialise() {
   digitalWrite(trigger1_, LOW);
   digitalWrite(trigger2_, LOW);
 
-  pid_ = Pid();
   pid_.Initialise();
 
   uint8_t err = 0;
@@ -73,7 +72,11 @@ uint8_t Fan::RunConstProfile(ConstProfile& profile) {
     if (output >= 0) {
       motor_.Forward((uint16_t)output);
     } else {
-      motor_.Reverse((uint16_t)(-output));
+      if (reversible_) {
+        motor_.Reverse((uint16_t)(-output));
+      } else {
+        motor_.Stop();
+      }
     }
 
     if (waiting_for_end_ && flow < 3.0) {
@@ -117,7 +120,11 @@ uint8_t Fan::RunDynamicProfile(DynamicProfile& profile) {
     if (output >= 0) {
       motor_.Forward((uint16_t)output);
     } else {
-      motor_.Reverse((uint16_t)(-output));
+      if (reversible_) {
+        motor_.Reverse((uint16_t)(-output));
+      } else {
+        motor_.Stop();
+      }
     }
 
     if (waiting_for_end_ && flow < 3.0) {

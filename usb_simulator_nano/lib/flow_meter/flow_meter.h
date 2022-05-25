@@ -29,6 +29,8 @@ class SFM3003 : public FlowMeter {
   uint8_t Initialise();
   uint8_t Reset();
 
+  const char* name = "SFM3003";
+
  private:
   const int32_t offset_ = -12288;
   const float scale_ = 120.0;
@@ -50,6 +52,8 @@ class SFM3000 : public FlowMeter {
   uint8_t GetFlow(float* res);
   uint8_t Initialise();
   uint8_t Reset();
+
+  const char* name = "SFM3000";
 
  private:
   const int32_t offset_ = 32000;

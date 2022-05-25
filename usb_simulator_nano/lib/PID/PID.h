@@ -6,11 +6,20 @@
 
 class Pid {
  public:
-  Pid() : sample_time_(5){};
+  Pid(double p, double i, double d) : kP(p), kI(i), kD(d), sample_time_(1){};
   void Initialise();
-  double kP = 80.0;
-  double kI = 0.5;
-  double kD = 0.0;
+
+  void SetP(double p) { kP = p; };
+  double kP;
+  void SetI(double i) { kI = i; };
+  double kI;
+  void SetD(double d) { kD = d; };
+  double kD;
+  void SetPid(double p, double i, double d) {
+    kP = p;
+    kI = i;
+    kD = d;
+  }
   double Compute(double input);
   void Start();
   void SetSetpoint(double setpoint) { setpoint_ = setpoint; };

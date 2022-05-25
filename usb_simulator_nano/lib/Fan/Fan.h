@@ -13,11 +13,14 @@
 
 class Fan {
  public:
-  Fan(MotorController& mc, FlowMeter& fm, uint8_t trigger1, uint8_t trigger2)
+  Fan(MotorController& mc, FlowMeter& fm, Pid& pid, uint8_t trigger1,
+      uint8_t trigger2, uint8_t reversible)
       : motor_(mc),
         flow_meter_(fm),
+        pid_(pid),
         trigger1_(trigger1),
         trigger2_(trigger2),
+        reversible_(reversible),
         print_interval_(5){};
 
   uint8_t Initialise();
@@ -34,12 +37,13 @@ class Fan {
  private:
   MotorController& motor_;
   FlowMeter& flow_meter_;
+  Pid& pid_;
   uint8_t trigger1_;
   uint8_t trigger2_;
+  uint8_t reversible_;
   uint8_t print_interval_;
   uint16_t trigger1_delay_;
   uint16_t trigger2_delay_;
   uint8_t sent_start_;
   uint8_t waiting_for_end_;
-  Pid pid_;
 };
