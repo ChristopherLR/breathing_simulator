@@ -42,6 +42,29 @@ SFM3003 flow_meter;
 #define LOW 0
 
 #ifdef ARDUINO_TEENSY41
+#define TRIGGER1 A10
+#define TRIGGER2 A11
+#if MC_SPARK
+#define SIGNAL 10
+#define MAX_VALUE 1000  // 16V (1000), 12V (750), 9V (650)
+Spark motor = Spark(SIGNAL, MAX_VALUE);
+#if FAN_VACUUM
+#define KP 4.5
+#define KI 0.225
+#define KD 0.8
+#define REVERSIBLE 1
+#elif FAN_IMPELLER
+#define KP 10
+#define KI 0.2
+#define KD 0.0
+#define REVERSIBLE 1
+#elif FAN_9HV0412P3K001
+#define KP 40.5
+#define KI 0.05
+#define KD 0.8
+#define REVERSIBLE 0
+#endif
+#endif
 #if MC_L298N
 #define SIGNAL A0
 #define EN 35
@@ -67,7 +90,7 @@ L298N motor = L298N(IN1, IN2, EN, SIGNAL, MAX_VALUE);
 
 #if MC_SPARK
 #define SIGNAL 10
-#define MAX_VALUE 650                    // 16V (1000), 12V (750), 9V (650)
+#define MAX_VALUE 1000                   // 16V (1000), 12V (750), 9V (650)
 Spark motor = Spark(SIGNAL, MAX_VALUE);  // 750
 #if FAN_VACUUM
 #define KP 4.5
@@ -117,6 +140,21 @@ L298N motor = L298N(IN1, IN2, EN, SIGNAL, MAX_VALUE);
 #endif
 
 #ifdef ARDUINO_SAMD_NANO_33_IOT
+#define TRIGGER1 9
+#define TRIGGER2 10
+
+#if MC_SPARK
+#define SIGNAL A0
+#define MAX_VALUE 1000                   // 16V (1000), 12V (750), 9V (650)
+Spark motor = Spark(SIGNAL, MAX_VALUE);  // 750
+#if FAN_VACUUM
+#define KP 4.0
+#define KI 0.04
+#define KD 0.0
+#define REVERSIBLE 1
+#endif
+#endif
+
 #endif
 
 elapsedMillis runtime;

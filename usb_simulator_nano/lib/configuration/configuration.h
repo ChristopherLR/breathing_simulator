@@ -1,12 +1,12 @@
 #pragma once
 
 // Motor Controller Selection
-#define MC_SPARK 0
-#define MC_L298N 1
+#define MC_SPARK 1
+#define MC_L298N 0
 
 // Flow Meter Selection
-#define FM_SFM3003 0
-#define FM_SFM3000 1
+#define FM_SFM3003 1
+#define FM_SFM3000 0
 
 // Fan Selection
 #define FAN_VACUUM 1

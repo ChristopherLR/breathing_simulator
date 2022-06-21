@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <elapsedMillis.h>
 #include <stdint.h>
 
 #define OFFSET -12288
@@ -12,6 +13,9 @@ void StartConstMeasurement();
 void StopConstMeasurement();
 void ReadFlow();
 
+elapsedMillis runtime;
+elapsedMillis elapsed;
+
 void setup() {
   Wire.begin();
   Serial.begin(BAUD);
@@ -19,11 +23,11 @@ void setup() {
   while (!Serial)
     ;
 
-  Serial.println("TEST");
-
   ResetSFM();
   StartConstMeasurement();
   delay(10);
+  runtime = 0;
+  elapsed = 0;
 }
 
 void ResetSFM() {
@@ -59,11 +63,15 @@ void ReadFlow() {
     lsb = Wire.read();
     raw_flow = (msb << 8) | lsb;
     flow = (raw_flow - OFFSET) / (float)SCALE;
+    Serial.print(runtime);
+    Serial.print(", ");
     Serial.println(flow);
   }
 }
 
 void loop() {
-  delay(10);
-  ReadFlow();
+  if (elapsed >= 5) {
+    ReadFlow();
+    elapsed = 0;
+  }
 }

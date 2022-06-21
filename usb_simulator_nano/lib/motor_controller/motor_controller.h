@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 
+#include "configuration.h"
+
 #if MC_SPARK
 #include <Servo.h>
 #endif

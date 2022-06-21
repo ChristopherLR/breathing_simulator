@@ -114,10 +114,12 @@ uint8_t DynamicProfile::Confirm() {
 
 void DynamicProfile::SetInterval(uint16_t interval, float flow) {
   uint16_t idx = interval / interval_;
+  if (idx > setpoint_size_) return;
   flow_setpoint_[idx] = flow;
 }
 
 float DynamicProfile::GetFlow(uint16_t runtime) {
   uint16_t idx = runtime / interval_;
+  if (idx > setpoint_size_) return 0;
   return flow_setpoint_[idx + 1];
 }
